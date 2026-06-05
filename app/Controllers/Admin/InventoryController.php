@@ -180,6 +180,16 @@ class InventoryController extends AdminController {
 
         try {
             $db = Database::getConnection();
+
+            // Check if chassis number already exists
+            $chCheck = $db->prepare("SELECT id FROM vehicles WHERE chassis_number = ? LIMIT 1");
+            $chCheck->execute([$chassis]);
+            if ($chCheck->fetch()) {
+                Session::setFlash('error', "The chassis number '{$chassis}' is already assigned to another vehicle.");
+                $this->redirect('/admin/inventory/new');
+                return;
+            }
+
             $db->beginTransaction();
 
             // 2. Generate unique stock_id using random_int() and max attempts limit
@@ -602,6 +612,15 @@ class InventoryController extends AdminController {
             }
             if ($description && mb_strlen($description) > 1000) {
                 Session::setFlash('error', 'Description must not exceed 1000 characters.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+
+            // Check if chassis number already exists for another vehicle
+            $chCheck = $db->prepare("SELECT id FROM vehicles WHERE chassis_number = ? AND id != ? LIMIT 1");
+            $chCheck->execute([$chassis, $id]);
+            if ($chCheck->fetch()) {
+                Session::setFlash('error', "The chassis number '{$chassis}' is already assigned to another vehicle.");
                 $this->redirect('/admin/inventory/edit/' . $id);
                 return;
             }

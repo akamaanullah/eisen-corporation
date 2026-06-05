@@ -66,3 +66,23 @@
             </header>
 
             <main class="content-body">
+                <?php
+                $adminFlash = \App\Core\Session::getFlash();
+                if ($adminFlash):
+                    $alertBg = ($adminFlash['type'] === 'success') ? '#1a4a2b' : '#4a151b';
+                    $alertColor = ($adminFlash['type'] === 'success') ? '#c6f6d5' : '#feb2b2';
+                    $alertBorder = ($adminFlash['type'] === 'success') ? 'rgba(198, 246, 213, 0.2)' : 'rgba(254, 178, 178, 0.2)';
+                    $icon = ($adminFlash['type'] === 'success') ? 'check-circle' : 'alert-circle';
+                ?>
+                    <div class="alert alert-<?= htmlspecialchars($adminFlash['type']) ?> mb-30" role="alert" style="padding: 14px 18px; border-radius: 8px; font-size: 14px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; line-height: 1.5; border: 1px solid <?= $alertBorder ?>; background: <?= $alertBg ?>; color: <?= $alertColor ?>;">
+                        <i data-lucide="<?= $icon ?>" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+                        <span><?= htmlspecialchars($adminFlash['message']) ?></span>
+                    </div>
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function() {
+                            if (typeof lucide !== 'undefined') {
+                                lucide.createIcons();
+                            }
+                        });
+                    </script>
+                <?php endif; ?>
