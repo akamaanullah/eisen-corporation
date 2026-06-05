@@ -154,8 +154,22 @@ foreach ($cars as $car) {
         </button>
     </div>
 
+    <!-- Empty State / Under Development for Auction tab -->
+    <div id="auctionUnderDevelopmentCard" class="card text-center mb-30" style="display: none; padding: 45px; text-align: center; background: var(--color-bg-light); border: 1px solid var(--color-border);">
+        <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: rgba(201, 162, 39, 0.1); border-radius: 50%; margin-bottom: 16px;">
+            <i data-lucide="gavel" style="width: 32px; height: 32px; color: var(--color-gold-500);"></i>
+        </div>
+        <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 8px; font-family: 'Montserrat', sans-serif;">Japan Live Auction Feed</h3>
+        <p style="color: var(--color-text-muted); max-width: 400px; margin: 0 auto 20px auto; font-size: 14px; line-height: 1.6;">
+            The Japan live auction system API integration is currently under development. Stay tuned for real-time bidding!
+        </p>
+        <div>
+            <span class="badge" style="background-color: #ecc94b; color: #744210; padding: 6px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; border-radius: 4px; letter-spacing: 0.5px;">Under Development</span>
+        </div>
+    </div>
+
     <!-- Inventory Table Grid -->
-    <div class="card" style="padding: 0;">
+    <div class="card" id="inventoryTableCard" style="padding: 0;">
         <div class="table-responsive">
             <table class="data-table-minimal" id="inventoryTable">
                 <thead>

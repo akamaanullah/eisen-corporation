@@ -22,6 +22,17 @@ document.addEventListener('DOMContentLoaded', function() {
             activeTabType = activeTab.getAttribute('data-filter-type');
         }
 
+        const tableCard = document.getElementById('inventoryTableCard');
+        const devCard = document.getElementById('auctionUnderDevelopmentCard');
+
+        if (activeTabType === 'Auction') {
+            if (tableCard) tableCard.style.display = 'none';
+            if (devCard) devCard.style.display = 'block';
+        } else {
+            if (tableCard) tableCard.style.display = 'block';
+            if (devCard) devCard.style.display = 'none';
+        }
+
         tableRows.forEach(row => {
             const rowType = row.getAttribute('data-type');
             const rowStatus = row.getAttribute('data-status');
