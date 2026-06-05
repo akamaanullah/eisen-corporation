@@ -290,14 +290,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Show saving message while form is uploading
-            toastr.options = {
-                "closeButton": false,
-                "progressBar": true,
-                "positionClass": "toast-top-right",
-                "timeOut": "5000"
-            };
-            toastr.info(`Saving vehicle listing "${make} ${model}" and uploading files...`, 'Saving Listing');
+            // Let the form submit naturally to the server which redirects and displays final flash alert
         });
     }
 });
