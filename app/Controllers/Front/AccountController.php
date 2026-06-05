@@ -3,8 +3,9 @@ namespace App\Controllers\Front;
 
 use App\Core\Controller;
 use App\Core\Session;
-use App\Core\Database;
-use PDO;
+use App\Models\User;
+use App\Models\Consignee;
+use App\Models\Vehicle;
 
 class AccountController extends Controller
 {
@@ -12,24 +13,21 @@ class AccountController extends Controller
     {
         if (!Session::isLoggedIn()) {
             $this->redirect('/login');
+            return;
         }
 
         $userId = Session::get('user_id');
         if (!$userId) {
             // Fallback: search by email if session user_id is missing
-            $db = Database::getConnection();
-            $stmt = $db->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
-            $stmt->execute([Session::get('user_email')]);
-            $u = $stmt->fetch();
+            $u = User::findByEmail(Session::get('user_email'));
             $userId = $u ? $u['id'] : null;
             if ($userId) {
                 Session::set('user_id', $userId);
             } else {
                 $this->redirect('/logout');
+                return;
             }
         }
-
-        echo "<!-- DEBUG: DYNAMIC ACCOUNT CONTROLLER INDEX - USER_ID: " . $userId . " -->\n";
 
         // Load static structure details
         $page = require dirname(__DIR__, 2) . '/Data/account_page.php';
@@ -40,12 +38,12 @@ class AccountController extends Controller
             $activeTab = 'profile';
         }
 
-        $db = Database::getConnection();
-
         // 1. Fetch Dynamic Profile Details
-        $stmt = $db->prepare("SELECT * FROM users WHERE id = ? LIMIT 1");
-        $stmt->execute([$userId]);
-        $dbUser = $stmt->fetch();
+        $dbUser = User::findById($userId);
+        if (!$dbUser) {
+            $this->redirect('/logout');
+            return;
+        }
 
         // Parse first name / last name fallback
         $firstName = $dbUser['first_name'] ?? '';
@@ -73,21 +71,10 @@ class AccountController extends Controller
         Session::set('user_name', $dbUser['name']);
 
         // 2. Fetch Consignee Details
-        $stmt = $db->prepare("SELECT * FROM consignees WHERE user_id = ? LIMIT 1");
-        $stmt->execute([$userId]);
-        $consignee = $stmt->fetch() ?: [];
+        $consignee = Consignee::findByUserId($userId);
 
         // 3. Fetch Dynamic Favorites
-        $stmt = $db->prepare("
-            SELECT v.*, 
-                   (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as image
-            FROM vehicle_favorites vf
-            JOIN vehicles v ON vf.vehicle_id = v.id
-            WHERE vf.user_id = ?
-            ORDER BY vf.created_at DESC
-        ");
-        $stmt->execute([$userId]);
-        $favRows = $stmt->fetchAll();
+        $favRows = Vehicle::findFavoritesByUserId($userId);
         
         $favorites = [];
         foreach ($favRows as $row) {
@@ -123,37 +110,11 @@ class AccountController extends Controller
         }
 
         // 4. Fetch Dynamic Payment Details (USD & JPY Totals)
-        // USD totals
-        $stmt = $db->prepare("
-            SELECT 
-                SUM(amount) as total_pay,
-                SUM(CASE WHEN vehicle_id IS NOT NULL AND payment_type IN ('Full Car Payment', 'Auction Balance') THEN amount ELSE 0 END) as total_allocated,
-                SUM(CASE WHEN payment_type = 'Auction Deposit' THEN amount ELSE 0 END) as total_deposit
-            FROM payments 
-            WHERE user_id = ? AND status = 'Confirmed' AND currency = 'USD'
-        ");
-        $stmt->execute([$userId]);
-        $usdPay = $stmt->fetch();
+        $usdPay = User::getUsdPaymentSummary($userId);
+        $usdSec = User::getUsdSecurityDeposit($userId);
 
-        $stmt = $db->prepare("SELECT SUM(amount) FROM security_deposits WHERE user_id = ? AND status = 'Approved' AND amount < 5000");
-        $stmt->execute([$userId]);
-        $usdSec = (float)$stmt->fetchColumn();
-
-        // JPY totals
-        $stmt = $db->prepare("
-            SELECT 
-                SUM(amount) as total_pay,
-                SUM(CASE WHEN vehicle_id IS NOT NULL AND payment_type IN ('Full Car Payment', 'Auction Balance') THEN amount ELSE 0 END) as total_allocated,
-                SUM(CASE WHEN payment_type = 'Auction Deposit' THEN amount ELSE 0 END) as total_deposit
-            FROM payments 
-            WHERE user_id = ? AND status = 'Confirmed' AND currency = 'JPY'
-        ");
-        $stmt->execute([$userId]);
-        $jpyPay = $stmt->fetch();
-
-        $stmt = $db->prepare("SELECT SUM(amount) FROM security_deposits WHERE user_id = ? AND status = 'Approved' AND amount >= 5000");
-        $stmt->execute([$userId]);
-        $jpySec = (float)$stmt->fetchColumn();
+        $jpyPay = User::getJpyPaymentSummary($userId);
+        $jpySec = User::getJpySecurityDeposit($userId);
 
         $page['paymentSummary'] = [
             [
@@ -173,15 +134,7 @@ class AccountController extends Controller
         ];
 
         // 5. Fetch Dynamic Ledger Log (Payments History)
-        $stmt = $db->prepare("
-            SELECT p.*, v.stock_id, v.chassis_number 
-            FROM payments p 
-            LEFT JOIN vehicles v ON p.vehicle_id = v.id 
-            WHERE p.user_id = ?
-            ORDER BY p.created_at DESC
-        ");
-        $stmt->execute([$userId]);
-        $ledgerRows = $stmt->fetchAll();
+        $ledgerRows = User::getLedgerLog($userId);
 
         $paymentHistory = [];
         foreach ($ledgerRows as $row) {
@@ -197,7 +150,7 @@ class AccountController extends Controller
                 'amount' => $formattedAmt,
                 'allocated' => $isAllocated ? $formattedAmt : ($row['currency'] === 'JPY' ? '0' : '0.00'),
                 'deposit' => $isDeposit ? $formattedAmt : ($row['currency'] === 'JPY' ? '0' : '0.00'),
-                'securityDeposit' => $row['currency'] === 'JPY' ? '0' : '0.00', // standard ledger security deposits are managed in summary
+                'securityDeposit' => $row['currency'] === 'JPY' ? '0' : '0.00',
                 'stockId' => $row['stock_id'] ?? '',
                 'chassis' => $row['chassis_number'] ?? '',
             ];
@@ -243,16 +196,7 @@ class AccountController extends Controller
         }
 
         // 6. Fetch Active Bids
-        $stmt = $db->prepare("
-            SELECT ab.*, v.stock_id, v.make, v.model, v.year, v.fob_price,
-                   (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as image
-            FROM auction_bids ab
-            JOIN vehicles v ON ab.vehicle_id = v.id
-            WHERE ab.user_id = ?
-            ORDER BY ab.placed_at DESC
-        ");
-        $stmt->execute([$userId]);
-        $bidRows = $stmt->fetchAll();
+        $bidRows = User::getActiveBids($userId);
         $bids = [];
         foreach ($bidRows as $row) {
             $img = $row['image'];
@@ -274,16 +218,7 @@ class AccountController extends Controller
         }
 
         // 7. Fetch Active Reservations
-        $stmt = $db->prepare("
-            SELECT r.*, v.stock_id, v.make, v.model, v.year, v.fob_price,
-                   (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as image
-            FROM reservations r
-            JOIN vehicles v ON r.vehicle_id = v.id
-            WHERE r.user_id = ?
-            ORDER BY r.created_at DESC
-        ");
-        $stmt->execute([$userId]);
-        $resRows = $stmt->fetchAll();
+        $resRows = User::getActiveReservations($userId);
         $reservations = [];
         foreach ($resRows as $row) {
             $img = $row['image'];
@@ -304,17 +239,7 @@ class AccountController extends Controller
         }
 
         // 8. Fetch Purchased Vehicles (Linked to Confirmed Payments)
-        $stmt = $db->prepare("
-            SELECT DISTINCT v.*, s.bl_number, s.vessel_name, s.etd, s.eta, s.status as shipment_status,
-                   (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as image
-            FROM vehicles v
-            JOIN payments p ON p.vehicle_id = v.id
-            LEFT JOIN shipments s ON s.vehicle_id = v.id
-            WHERE p.user_id = ? AND p.status = 'Confirmed' AND p.payment_type IN ('Full Car Payment', 'Auction Balance')
-            ORDER BY p.created_at DESC
-        ");
-        $stmt->execute([$userId]);
-        $purchasedRows = $stmt->fetchAll();
+        $purchasedRows = Vehicle::findPurchasedByUserId($userId);
         $purchasedVehicles = [];
         foreach ($purchasedRows as $row) {
             $img = $row['image'];
@@ -337,22 +262,22 @@ class AccountController extends Controller
             ];
         }
 
-        // 9. Override Account Info Customer & Bank details dynamically (Keep customer ID & Name, make all others Eisen Corporation company details)
-        $page['accountInfo']['left'][0]['value'] = 'EIS-' . str_pad($userId, 7, '0', STR_PAD_LEFT); // Customer Id
-        $page['accountInfo']['left'][1]['value'] = $dbUser['name']; // Customer Name
-        $page['accountInfo']['left'][2]['value'] = 'MUFG Bank, Ltd.'; // Bank Name
-        $page['accountInfo']['left'][3]['value'] = 'Eisen Corporation Co., Ltd.'; // Account Name
-        $page['accountInfo']['left'][4]['value'] = 'Kobe Main Branch'; // Branch
-        $page['accountInfo']['left'][5]['value'] = '402-9840219-0'; // Account Number
-        $page['accountInfo']['left'][6]['value'] = 'MUFGJPJT'; // Swift Code
-        $page['accountInfo']['bankAddress']['value'] = '1-1-5, Sakaemachidori, Chuo Ward, Kobe, Hyogo 650-0023, Japan'; // Bank Address
+        // 9. Override Account Info Customer & Bank details dynamically
+        $page['accountInfo']['left'][0]['value'] = 'EIS-' . str_pad($userId, 7, '0', STR_PAD_LEFT);
+        $page['accountInfo']['left'][1]['value'] = $dbUser['name'];
+        $page['accountInfo']['left'][2]['value'] = 'MUFG Bank, Ltd.';
+        $page['accountInfo']['left'][3]['value'] = 'Eisen Corporation Co., Ltd.';
+        $page['accountInfo']['left'][4]['value'] = 'Kobe Main Branch';
+        $page['accountInfo']['left'][5]['value'] = '402-9840219-0';
+        $page['accountInfo']['left'][6]['value'] = 'MUFGJPJT';
+        $page['accountInfo']['bankAddress']['value'] = '1-1-5, Sakaemachidori, Chuo Ward, Kobe, Hyogo 650-0023, Japan';
 
-        $page['accountInfo']['right'][0]['value'] = 'Eisen Inc.'; // Company
-        $page['accountInfo']['right'][1]['value'] = '3-22-32 Tanaka, Matsubushi Machi, Kitakatsushika Gun, Saitama Prefecture, 343-0117'; // Address
-        $page['accountInfo']['right'][2]['value'] = '090 3350 8523'; // Tel
-        $page['accountInfo']['right'][3]['value'] = '-'; // Fax
-        $page['accountInfo']['right'][4]['value'] = 'sales@eisenwheels.com'; // Email
-        $page['accountInfo']['right'][5]['value'] = 'https://eisenwheels.com'; // Web Site
+        $page['accountInfo']['right'][0]['value'] = 'Eisen Inc.';
+        $page['accountInfo']['right'][1]['value'] = '3-22-32 Tanaka, Matsubushi Machi, Kitakatsushika Gun, Saitama Prefecture, 343-0117';
+        $page['accountInfo']['right'][2]['value'] = '090 3350 8523';
+        $page['accountInfo']['right'][3]['value'] = '-';
+        $page['accountInfo']['right'][4]['value'] = 'sales@eisenwheels.com';
+        $page['accountInfo']['right'][5]['value'] = 'https://eisenwheels.com';
 
         // Render view
         $this->view('front/account', array_merge($page, [
@@ -377,10 +302,17 @@ class AccountController extends Controller
     {
         if (!Session::isLoggedIn()) {
             $this->redirect('/login');
+            return;
         }
 
         $userId = Session::get('user_id');
-        $this->validateCsrf();
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/account?tab=profile');
+            return;
+        }
 
         $firstName = trim((string)($_POST['first_name'] ?? ''));
         $lastName = trim((string)($_POST['last_name'] ?? ''));
@@ -395,29 +327,34 @@ class AccountController extends Controller
         if ($firstName === '') {
             Session::setFlash('error', 'First name is required.');
             $this->redirect('/account?tab=profile');
+            return;
         }
 
-        $db = Database::getConnection();
+        // Input validation checks
+        if (mb_strlen($firstName) > 50 || mb_strlen($lastName) > 50) {
+            Session::setFlash('error', 'First name and last name must not exceed 50 characters.');
+            $this->redirect('/account?tab=profile');
+            return;
+        }
+        if (mb_strlen($address) > 255 || mb_strlen($address2) > 255) {
+            Session::setFlash('error', 'Address fields must not exceed 255 characters.');
+            $this->redirect('/account?tab=profile');
+            return;
+        }
+        if (mb_strlen($city) > 100 || mb_strlen($state) > 100 || mb_strlen($importCountry) > 100 || mb_strlen($port) > 100) {
+            Session::setFlash('error', 'City, State, Country, and Port must not exceed 100 characters.');
+            $this->redirect('/account?tab=profile');
+            return;
+        }
+        if (mb_strlen($zip) > 20) {
+            Session::setFlash('error', 'Zip code must not exceed 20 characters.');
+            $this->redirect('/account?tab=profile');
+            return;
+        }
+
         $fullName = trim($firstName . ' ' . $lastName);
 
-        $stmt = $db->prepare("
-            UPDATE users 
-            SET name = ?, first_name = ?, last_name = ?, address = ?, address2 = ?, city = ?, state = ?, zip = ?, country = ?, destination_port = ?
-            WHERE id = ?
-        ");
-        $stmt->execute([
-            $fullName,
-            $firstName,
-            $lastName,
-            $address,
-            $address2,
-            $city,
-            $state,
-            $zip,
-            $importCountry,
-            $port,
-            $userId
-        ]);
+        User::updateProfile($userId, $fullName, $firstName, $lastName, $address, $address2, $city, $state, $zip, $importCountry, $port);
 
         Session::set('user_name', $fullName);
         Session::setFlash('success', 'Profile updated successfully!');
@@ -428,10 +365,17 @@ class AccountController extends Controller
     {
         if (!Session::isLoggedIn()) {
             $this->redirect('/login');
+            return;
         }
 
         $userId = Session::get('user_id');
-        $this->validateCsrf();
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/account?tab=consignee');
+            return;
+        }
 
         // Get fields
         $consigneeName = trim((string)($_POST['consignee_name'] ?? ''));
@@ -470,11 +414,13 @@ class AccountController extends Controller
         if ($consigneeName === '' || $consigneeCountry === '' || $consigneeState === '' || $consigneeCity === '' || $consigneeAddress === '') {
             Session::setFlash('error', 'Please fill in all required Consignee fields marked with an asterisk (*).');
             $this->redirect('/account?tab=consignee');
+            return;
         }
 
         if (!$notifySame && ($notifyName === '' || $notifyCountry === '' || $notifyState === '' || $notifyCity === '' || $notifyAddress === '')) {
             Session::setFlash('error', 'Please fill in all required Notify fields marked with an asterisk (*) or check "Notify Same as Consignee".');
             $this->redirect('/account?tab=consignee');
+            return;
         }
 
         if ($notifySame) {
@@ -492,46 +438,107 @@ class AccountController extends Controller
             $notifyEmail3 = $consigneeEmail3;
         }
 
-        $db = Database::getConnection();
+        // Input validation & length checks
+        if (mb_strlen($consigneeName) > 100 || mb_strlen($notifyName) > 100) {
+            Session::setFlash('error', 'Names must not exceed 100 characters.');
+            $this->redirect('/account?tab=consignee');
+            return;
+        }
+        if (mb_strlen($consigneeCountry) > 100 || mb_strlen($notifyCountry) > 100 ||
+            mb_strlen($consigneeState) > 100 || mb_strlen($notifyState) > 100 ||
+            mb_strlen($consigneeCity) > 100 || mb_strlen($notifyCity) > 100) {
+            Session::setFlash('error', 'Country, State, and City fields must not exceed 100 characters.');
+            $this->redirect('/account?tab=consignee');
+            return;
+        }
+        if (mb_strlen($consigneeAddress) > 255 || mb_strlen($notifyAddress) > 255 ||
+            mb_strlen($consigneeRefAddress) > 255 || mb_strlen($notifyRefAddress) > 255) {
+            Session::setFlash('error', 'Address fields must not exceed 255 characters.');
+            $this->redirect('/account?tab=consignee');
+            return;
+        }
         
-        $checkStmt = $db->prepare("SELECT id FROM consignees WHERE user_id = ? LIMIT 1");
-        $checkStmt->execute([$userId]);
-        $exists = $checkStmt->fetch();
+        // Email validations
+        $emails = [
+            'Consignee Email 1' => $consigneeEmail1,
+            'Consignee Email 2' => $consigneeEmail2,
+            'Consignee Email 3' => $consigneeEmail3,
+            'Notify Email 1' => $notifyEmail1,
+            'Notify Email 2' => $notifyEmail2,
+            'Notify Email 3' => $notifyEmail3
+        ];
+        foreach ($emails as $label => $val) {
+            if ($val !== '') {
+                if (mb_strlen($val) > 100) {
+                    Session::setFlash('error', "{$label} must not exceed 100 characters.");
+                    $this->redirect('/account?tab=consignee');
+                    return;
+                }
+                if (!filter_var($val, FILTER_VALIDATE_EMAIL)) {
+                    Session::setFlash('error', "{$label} is not a valid email address.");
+                    $this->redirect('/account?tab=consignee');
+                    return;
+                }
+            }
+        }
 
-        if ($exists) {
-            $stmt = $db->prepare("
-                UPDATE consignees 
-                SET consignee_name = ?, consignee_country = ?, consignee_state = ?, consignee_city = ?, consignee_address = ?, consignee_ref_address = ?,
-                    consignee_phone_1 = ?, consignee_phone_2 = ?, consignee_phone_3 = ?, consignee_email_1 = ?, consignee_email_2 = ?, consignee_email_3 = ?,
-                    notify_name = ?, notify_country = ?, notify_state = ?, notify_city = ?, notify_address = ?, notify_ref_address = ?,
-                    notify_phone_1 = ?, notify_phone_2 = ?, notify_phone_3 = ?, notify_email_1 = ?, notify_email_2 = ?, notify_email_3 = ?,
-                    notify_same = ?, permanent = ?
-                WHERE user_id = ?
-            ");
-            $stmt->execute([
-                $consigneeName, $consigneeCountry, $consigneeState, $consigneeCity, $consigneeAddress, $consigneeRefAddress,
-                $consigneePhone1, $consigneePhone2, $consigneePhone3, $consigneeEmail1, $consigneeEmail2, $consigneeEmail3,
-                $notifyName, $notifyCountry, $notifyState, $notifyCity, $notifyAddress, $notifyRefAddress,
-                $notifyPhone1, $notifyPhone2, $notifyPhone3, $notifyEmail1, $notifyEmail2, $notifyEmail3,
-                $notifySame, $permanent, $userId
-            ]);
+        // Phone validations
+        $phones = [
+            'Consignee Phone 1' => $consigneePhone1,
+            'Consignee Phone 2' => $consigneePhone2,
+            'Consignee Phone 3' => $consigneePhone3,
+            'Notify Phone 1' => $notifyPhone1,
+            'Notify Phone 2' => $notifyPhone2,
+            'Notify Phone 3' => $notifyPhone3
+        ];
+        foreach ($phones as $label => $val) {
+            if ($val !== '') {
+                if (mb_strlen($val) > 30) {
+                    Session::setFlash('error', "{$label} must not exceed 30 characters.");
+                    $this->redirect('/account?tab=consignee');
+                    return;
+                }
+                if (!preg_match('/^[0-9+\-\s()]+$/', $val)) {
+                    Session::setFlash('error', "{$label} contains invalid characters. Only digits, spaces, -, +, and parentheses are allowed.");
+                    $this->redirect('/account?tab=consignee');
+                    return;
+                }
+            }
+        }
+
+        $consigneeData = [
+            'consignee_name' => $consigneeName,
+            'consignee_country' => $consigneeCountry,
+            'consignee_state' => $consigneeState,
+            'consignee_city' => $consigneeCity,
+            'consignee_address' => $consigneeAddress,
+            'consignee_ref_address' => $consigneeRefAddress,
+            'consignee_phone_1' => $consigneePhone1,
+            'consignee_phone_2' => $consigneePhone2,
+            'consignee_phone_3' => $consigneePhone3,
+            'consignee_email_1' => $consigneeEmail1,
+            'consignee_email_2' => $consigneeEmail2,
+            'consignee_email_3' => $consigneeEmail3,
+            'notify_name' => $notifyName,
+            'notify_country' => $notifyCountry,
+            'notify_state' => $notifyState,
+            'notify_city' => $notifyCity,
+            'notify_address' => $notifyAddress,
+            'notify_ref_address' => $notifyRefAddress,
+            'notify_phone_1' => $notifyPhone1,
+            'notify_phone_2' => $notifyPhone2,
+            'notify_phone_3' => $notifyPhone3,
+            'notify_email_1' => $notifyEmail1,
+            'notify_email_2' => $notifyEmail2,
+            'notify_email_3' => $notifyEmail3,
+            'notify_same' => $notifySame,
+            'permanent' => $permanent
+        ];
+
+        if (Consignee::existsForUser($userId)) {
+            Consignee::update($userId, $consigneeData);
         } else {
-            $stmt = $db->prepare("
-                INSERT INTO consignees (
-                    user_id, consignee_name, consignee_country, consignee_state, consignee_city, consignee_address, consignee_ref_address,
-                    consignee_phone_1, consignee_phone_2, consignee_phone_3, consignee_email_1, consignee_email_2, consignee_email_3,
-                    notify_name, notify_country, notify_state, notify_city, notify_address, notify_ref_address,
-                    notify_phone_1, notify_phone_2, notify_phone_3, notify_email_1, notify_email_2, notify_email_3,
-                    notify_same, permanent
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([
-                $userId, $consigneeName, $consigneeCountry, $consigneeState, $consigneeCity, $consigneeAddress, $consigneeRefAddress,
-                $consigneePhone1, $consigneePhone2, $consigneePhone3, $consigneeEmail1, $consigneeEmail2, $consigneeEmail3,
-                $notifyName, $notifyCountry, $notifyState, $notifyCity, $notifyAddress, $notifyRefAddress,
-                $notifyPhone1, $notifyPhone2, $notifyPhone3, $notifyEmail1, $notifyEmail2, $notifyEmail3,
-                $notifySame, $permanent
-            ]);
+            Consignee::create($userId, $consigneeData);
         }
 
         Session::setFlash('success', 'Consignee details saved successfully!');
@@ -545,7 +552,6 @@ class AccountController extends Controller
         }
 
         $userId = Session::get('user_id');
-        
         try {
             $this->validateCsrf();
         } catch (\Exception $e) {
@@ -557,18 +563,12 @@ class AccountController extends Controller
             return $this->jsonResponse(['status' => 'error', 'message' => 'Invalid Stock ID'], 400);
         }
 
-        $db = Database::getConnection();
-
-        $vStmt = $db->prepare("SELECT id FROM vehicles WHERE stock_id = ? LIMIT 1");
-        $vStmt->execute([$stockId]);
-        $vehicle = $vStmt->fetch();
-
+        $vehicle = Vehicle::findByStockId($stockId);
         if (!$vehicle) {
             return $this->jsonResponse(['status' => 'error', 'message' => 'Vehicle not found.'], 404);
         }
 
-        $delStmt = $db->prepare("DELETE FROM vehicle_favorites WHERE user_id = ? AND vehicle_id = ?");
-        $delStmt->execute([$userId, $vehicle['id']]);
+        Vehicle::removeFavorite($userId, $vehicle['id']);
 
         return $this->jsonResponse(['status' => 'success', 'message' => 'Favorite removed successfully.']);
     }

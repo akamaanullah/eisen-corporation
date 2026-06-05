@@ -274,18 +274,20 @@ class ListingController extends Controller {
             
             $offset = ($page - 1) * $perPage;
             
-            // Fetch rows
-            $dataSql = "SELECT * FROM vehicles WHERE {$whereClause} ORDER BY featured DESC, id DESC LIMIT {$perPage} OFFSET {$offset}";
+            // Fetch rows with optimized subquery to avoid N+1 query loop
+            $dataSql = "SELECT v.*, 
+                               (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) AS image_url 
+                        FROM vehicles v 
+                        WHERE {$whereClause} 
+                        ORDER BY v.featured DESC, v.id DESC 
+                        LIMIT {$perPage} OFFSET {$offset}";
             $dataStmt = $db->prepare($dataSql);
             $dataStmt->execute($params);
             $cars = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
             
             $result = [];
             foreach ($cars as $car) {
-                // Fetch first thumbnail
-                $imgStmt = $db->prepare("SELECT image_url FROM vehicle_images WHERE vehicle_id = ? ORDER BY sort_order ASC LIMIT 1");
-                $imgStmt->execute([$car['id']]);
-                $imgUrl = $imgStmt->fetchColumn();
+                $imgUrl = $car['image_url'];
                 
                 if (empty($imgUrl)) {
                     $imageSrc = 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=600&q=80';

@@ -4,12 +4,24 @@ namespace App\Core;
 class Controller {
     
     /**
+     * Load security response headers
+     */
+    protected function sendSecurityHeaders() {
+        if (!headers_sent()) {
+            header("X-Frame-Options: SAMEORIGIN");
+            header("X-Content-Type-Options: nosniff");
+            header("X-XSS-Protection: 1; mode=block");
+        }
+    }
+
+    /**
      * Load a view file and pass data to it.
      * 
      * @param string $view Path to the view (e.g., 'front/home' or 'admin/dashboard')
      * @param array $data Data to extract and pass to the view
      */
     protected function view($view, $data = []) {
+        $this->sendSecurityHeaders();
         // Extract array keys into variables for the view
         extract($data);
         
@@ -49,6 +61,7 @@ class Controller {
      * Send a JSON response
      */
     protected function jsonResponse($data, $status = 200) {
+        $this->sendSecurityHeaders();
         header('Content-Type: application/json');
         http_response_code($status);
         echo json_encode($data);
@@ -77,9 +90,32 @@ class Controller {
             }
 
             if (!\App\Core\Session::validateCsrfToken($token)) {
-                http_response_code(403);
-                $this->jsonResponse(['status' => 'error', 'message' => 'CSRF token validation failed.'], 403);
+                throw new \Exception("CSRF token validation failed.", 403);
             }
         }
+    }
+
+    /**
+     * Simple session-based IP / Action rate limiting
+     */
+    protected function checkRateLimit($key, $maxAttempts = 5, $decaySeconds = 60) {
+        if (session_status() === PHP_SESSION_NONE) {
+            \App\Core\Session::init();
+        }
+        $now = time();
+        $attempts = $_SESSION["rate_limit_{$key}"] ?? [];
+        
+        // Remove expired timestamps
+        $attempts = array_filter($attempts, function($time) use ($now, $decaySeconds) {
+            return ($now - $time) < $decaySeconds;
+        });
+        
+        if (count($attempts) >= $maxAttempts) {
+            return false;
+        }
+        
+        $attempts[] = $now;
+        $_SESSION["rate_limit_{$key}"] = $attempts;
+        return true;
     }
 }

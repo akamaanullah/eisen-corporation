@@ -61,6 +61,10 @@ $router->post('/account/favorites/remove', 'Front\AccountController@removeFavori
 // 5. User Authentication Routes
 $router->get('/login', 'Front\UserAuthController@showLoginForm');
 $router->post('/login', 'Front\UserAuthController@login');
+$router->get('/forgot-password', 'Front\UserAuthController@showForgotPasswordForm');
+$router->post('/forgot-password', 'Front\UserAuthController@sendForgotPassword');
+$router->get('/reset-password', 'Front\UserAuthController@showResetPasswordForm');
+$router->post('/reset-password', 'Front\UserAuthController@resetPassword');
 $router->post('/signup/send-otp', 'Front\UserAuthController@sendOtp');
 $router->post('/signup/verify-otp', 'Front\UserAuthController@verifyOtp');
 $router->post('/signup/complete', 'Front\UserAuthController@completeSignup');
@@ -74,6 +78,8 @@ $router->get('/admin/login', 'Admin\AuthController@showLoginForm');
 $router->post('/admin/login', 'Admin\AuthController@login');
 $router->get('/admin/forgot-password', 'Admin\AuthController@showForgotPasswordForm');
 $router->post('/admin/forgot-password', 'Admin\AuthController@sendForgotPassword');
+$router->get('/admin/reset-password', 'Admin\AuthController@showResetPasswordForm');
+$router->post('/admin/reset-password', 'Admin\AuthController@resetPassword');
 $router->get('/admin/logout', 'Admin\AuthController@logout');
 $router->get('/admin/inventory', 'Admin\InventoryController@index');
 $router->get('/admin/inventory/new', 'Admin\InventoryController@create');

@@ -127,4 +127,13 @@ class Session {
         $storedToken = self::getCsrfToken();
         return !empty($token) && hash_equals($storedToken, $token);
     }
+
+    /**
+     * Regenerate session ID safely
+     */
+    public static function regenerateId() {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+    }
 }

@@ -2,7 +2,7 @@
 // config/config.php
 
 // Set local timezone
-date_default_timezone_set('Asia/Karachi');
+date_default_timezone_set('Asia/Tokyo');
 
 // Base URLs
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
@@ -33,6 +33,15 @@ if (!defined('DB_HOST')) define('DB_HOST', 'localhost');
 if (!defined('DB_USER')) define('DB_USER', 'root');
 if (!defined('DB_PASS')) define('DB_PASS', '');
 if (!defined('DB_NAME')) define('DB_NAME', 'eisen_db');
+
+// SMTP Settings Fallbacks
+if (!defined('SMTP_HOST')) define('SMTP_HOST', 'smtp.gmail.com');
+if (!defined('SMTP_PORT')) define('SMTP_PORT', 587);
+if (!defined('SMTP_USER')) define('SMTP_USER', 'your_smtp_email@gmail.com');
+if (!defined('SMTP_PASS')) define('SMTP_PASS', 'your_smtp_app_password');
+if (!defined('SMTP_SECURE')) define('SMTP_SECURE', 'tls');
+if (!defined('SMTP_FROM_EMAIL')) define('SMTP_FROM_EMAIL', 'your_smtp_email@gmail.com');
+if (!defined('SMTP_FROM_NAME')) define('SMTP_FROM_NAME', 'Eisen Corporation');
 
 // Google OAuth Configuration
 if (!defined('GOOGLE_CLIENT_ID')) define('GOOGLE_CLIENT_ID', 'YOUR_GOOGLE_CLIENT_ID');

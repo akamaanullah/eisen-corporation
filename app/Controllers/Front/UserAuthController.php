@@ -47,6 +47,14 @@ class UserAuthController extends Controller {
             return;
         }
 
+        // Rate limiting: max 10 login attempts per 60 seconds
+        $rateLimitKey = 'login_' . md5($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        if (!$this->checkRateLimit($rateLimitKey, 10, 60)) {
+            Session::setFlash('error', 'Too many login attempts. Please wait a minute and try again.');
+            $this->redirect('/login');
+            return;
+        }
+
         try {
             $db = Database::getConnection();
             $stmt = $db->prepare("SELECT * FROM users WHERE email = ? LIMIT 1");
@@ -66,7 +74,12 @@ class UserAuthController extends Controller {
                 return;
             }
 
+            // Harden session: regenerate ID and CSRF token to prevent fixation
+            Session::regenerateId();
+            Session::regenerateCsrfToken();
+
             Session::set('is_logged_in', true);
+            Session::set('user_id', $user['id']);
             Session::set('user_role', $user['role']);
             Session::set('user_name', $user['name']);
             Session::set('user_email', $user['email']);
@@ -74,7 +87,8 @@ class UserAuthController extends Controller {
             Session::setFlash('success', 'Welcome back, ' . $user['name'] . '!');
             $this->redirect('/');
         } catch (\Exception $e) {
-            Session::setFlash('error', 'An error occurred during sign in: ' . $e->getMessage());
+            error_log('Login error: ' . $e->getMessage());
+            Session::setFlash('error', 'An error occurred during sign in. Please try again.');
             $this->redirect('/login');
         }
     }
@@ -88,6 +102,12 @@ class UserAuthController extends Controller {
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return $this->jsonResponse(['status' => 'error', 'message' => 'Please enter a valid email address.'], 400);
+        }
+
+        // Rate limiting: max 3 OTP sends per 60 seconds
+        $rateLimitKey = 'otp_' . md5($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        if (!$this->checkRateLimit($rateLimitKey, 3, 60)) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Too many requests. Please wait before requesting another code.'], 429);
         }
 
         try {
@@ -118,7 +138,8 @@ class UserAuthController extends Controller {
 
             return $this->jsonResponse(['status' => 'success', 'message' => 'Verification code sent successfully to ' . htmlspecialchars($email)]);
         } catch (\Exception $e) {
-            return $this->jsonResponse(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()], 500);
+            error_log('sendOtp error: ' . $e->getMessage());
+            return $this->jsonResponse(['status' => 'error', 'message' => 'A server error occurred. Please try again later.'], 500);
         }
     }
 
@@ -199,8 +220,15 @@ class UserAuthController extends Controller {
                 $newsletterSubscribed ? 1 : 0
             ]);
 
+            $newUserId = $db->lastInsertId();
+
+            // Harden session: regenerate ID and CSRF token to prevent fixation
+            Session::regenerateId();
+            Session::regenerateCsrfToken();
+
             // Set login session
             Session::set('is_logged_in', true);
+            Session::set('user_id', $newUserId);
             Session::set('user_role', 'registered_buyer');
             Session::set('user_name', $name);
             Session::set('user_email', $email);
@@ -215,7 +243,8 @@ class UserAuthController extends Controller {
             Session::setFlash('success', 'Account created successfully! Welcome to Eisen Corporation.');
             $this->redirect('/');
         } catch (\Exception $e) {
-            Session::setFlash('error', 'An error occurred during account creation: ' . $e->getMessage());
+            error_log('completeSignup error: ' . $e->getMessage());
+            Session::setFlash('error', 'An error occurred during account creation. Please try again.');
             $this->redirect('/login?tab=signup');
         }
     }
@@ -273,14 +302,14 @@ class UserAuthController extends Controller {
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postFields));
             curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // For local development cert compatibility
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
             $response = curl_exec($ch);
             $curlError = curl_error($ch);
             curl_close($ch);
 
             $tokenData = json_decode($response, true);
             if (empty($tokenData['access_token'])) {
-                $err = $tokenData['error_description'] ?? $curlError ?? 'No token returned';
+                $err = $tokenData['error_description'] ?? ($curlError !== '' ? 'cURL error' : 'No token returned');
                 throw new \Exception($err);
             }
 
@@ -288,7 +317,7 @@ class UserAuthController extends Controller {
             $userInfoUrl = 'https://www.googleapis.com/oauth2/v3/userinfo?access_token=' . urlencode($tokenData['access_token']);
             $ch = curl_init($userInfoUrl);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
             $userInfoResponse = curl_exec($ch);
             curl_close($ch);
 
@@ -319,8 +348,13 @@ class UserAuthController extends Controller {
                 return;
             }
 
+            // Harden session: regenerate ID and CSRF token to prevent fixation
+            Session::regenerateId();
+            Session::regenerateCsrfToken();
+
             // Establish the session
             Session::set('is_logged_in', true);
+            Session::set('user_id', $user['id']);
             Session::set('user_role', $user['role']);
             Session::set('user_name', $user['name']);
             Session::set('user_email', $user['email']);
@@ -335,8 +369,160 @@ class UserAuthController extends Controller {
                 $this->redirect('/');
             }
         } catch (\Exception $e) {
-            Session::setFlash('error', 'Google authentication failed: ' . $e->getMessage());
+            error_log('Google OAuth error: ' . $e->getMessage());
+            Session::setFlash('error', 'Google authentication failed. Please try again.');
             $this->redirect('/login');
+        }
+    }
+
+    public function showForgotPasswordForm() {
+        if (Session::get('is_logged_in') === true) {
+            $this->redirect('/');
+            return;
+        }
+
+        $flash = Session::getFlash();
+        $this->view('front/forgot-password', [
+            'flash' => $flash,
+        ]);
+    }
+
+    public function sendForgotPassword() {
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/forgot-password');
+            return;
+        }
+
+        $email = trim($_POST['email'] ?? '');
+
+        if ($email === '') {
+            Session::setFlash('error', 'Please enter your email address.');
+            $this->redirect('/forgot-password');
+            return;
+        }
+
+        // Rate limiting: max 3 requests per 5 minutes (300 seconds)
+        $rateLimitKey = 'forgot_' . md5($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+        if (!$this->checkRateLimit($rateLimitKey, 3, 300)) {
+            Session::setFlash('error', 'Too many requests. Please wait a few minutes before trying again.');
+            $this->redirect('/forgot-password');
+            return;
+        }
+
+        try {
+            $db = Database::getConnection();
+            $stmt = $db->prepare("SELECT id, role FROM users WHERE email = ? LIMIT 1");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+
+            // Only proceed if user exists and is a registered buyer (not admin/staff)
+            if ($user && $user['role'] === 'registered_buyer') {
+                $token = bin2hex(random_bytes(32));
+                $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour expiry
+
+                $upd = $db->prepare("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?");
+                $upd->execute([$token, $expires, $user['id']]);
+
+                Mailer::sendPasswordReset($email, BASE_URL . '/reset-password?token=' . urlencode($token));
+            }
+        } catch (\Exception $e) {
+            error_log('User Forgot password error: ' . $e->getMessage());
+        }
+
+        // Always show success to prevent email enumeration
+        Session::setFlash('success', 'If an account exists for that email, a reset link has been sent.');
+        $this->redirect('/forgot-password');
+    }
+
+    public function showResetPasswordForm() {
+        $token = trim($_GET['token'] ?? '');
+        $flash = Session::getFlash();
+
+        if ($token === '') {
+            $this->redirect('/forgot-password');
+            return;
+        }
+
+        // Validate token exists and is not expired
+        try {
+            $db = Database::getConnection();
+            $stmt = $db->prepare("SELECT id FROM users WHERE reset_token = ? AND reset_token_expires > NOW() LIMIT 1");
+            $stmt->execute([$token]);
+            $user = $stmt->fetch();
+
+            if (!$user) {
+                Session::setFlash('error', 'This password reset link is invalid or has expired.');
+                $this->redirect('/forgot-password');
+                return;
+            }
+        } catch (\Exception $e) {
+            error_log('User Reset password validation error: ' . $e->getMessage());
+            $this->redirect('/forgot-password');
+            return;
+        }
+
+        $this->view('front/reset-password', [
+            'flash' => $flash,
+            'token' => htmlspecialchars($token),
+        ]);
+    }
+
+    public function resetPassword() {
+        $token = trim($_POST['token'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $confirmPassword = $_POST['confirm_password'] ?? '';
+
+        if ($token === '' || $password === '' || $confirmPassword === '') {
+            Session::setFlash('error', 'All fields are required.');
+            $this->redirect('/reset-password?token=' . urlencode($token));
+            return;
+        }
+
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/reset-password?token=' . urlencode($token));
+            return;
+        }
+
+        if ($password !== $confirmPassword) {
+            Session::setFlash('error', 'Passwords do not match.');
+            $this->redirect('/reset-password?token=' . urlencode($token));
+            return;
+        }
+
+        if (strlen($password) < 8) {
+            Session::setFlash('error', 'Password must be at least 8 characters long.');
+            $this->redirect('/reset-password?token=' . urlencode($token));
+            return;
+        }
+
+        try {
+            $db = Database::getConnection();
+            $stmt = $db->prepare("SELECT id FROM users WHERE reset_token = ? AND reset_token_expires > NOW() LIMIT 1");
+            $stmt->execute([$token]);
+            $user = $stmt->fetch();
+
+            if (!$user) {
+                Session::setFlash('error', 'This password reset link is invalid or has expired.');
+                $this->redirect('/forgot-password');
+                return;
+            }
+
+            $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
+            $upd = $db->prepare("UPDATE users SET password = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?");
+            $upd->execute([$hashedPassword, $user['id']]);
+
+            Session::setFlash('success', 'Password reset successfully! You can now sign in with your new password.');
+            $this->redirect('/login');
+        } catch (\Exception $e) {
+            error_log('User Reset password error: ' . $e->getMessage());
+            Session::setFlash('error', 'An error occurred. Please try again.');
+            $this->redirect('/reset-password?token=' . urlencode($token));
         }
     }
 

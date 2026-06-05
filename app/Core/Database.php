@@ -26,7 +26,9 @@ class Database {
                     PDO::ATTR_EMULATE_PREPARES => false,
                 ]);
             } catch (PDOException $e) {
-                die("Database connection failed: " . $e->getMessage());
+                error_log("Database connection failed: " . $e->getMessage());
+                http_response_code(500);
+                die("A database connection error occurred. Please contact the system administrator.");
             }
         }
         return self::$instance;

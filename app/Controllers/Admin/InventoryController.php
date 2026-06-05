@@ -86,7 +86,13 @@ class InventoryController extends AdminController {
     }
 
     public function store() {
-        $this->validateCsrf();
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
 
         // 1. Retrieve and sanitize input fields
         $make = trim($_POST['make'] ?? '');
@@ -144,16 +150,41 @@ class InventoryController extends AdminController {
             return;
         }
 
+        // Length validation checks
+        if (mb_strlen($make) > 50 || mb_strlen($model) > 50 || mb_strlen($chassis) > 50 || mb_strlen($grade) > 50 || mb_strlen($color) > 50 || mb_strlen($dimension) > 50) {
+            Session::setFlash('error', 'Fields make, model, chassis, grade, color, and dimension must not exceed 50 characters.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
+        if (mb_strlen($location) > 100) {
+            Session::setFlash('error', 'Location must not exceed 100 characters.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
+        if (mb_strlen($m3) > 20) {
+            Session::setFlash('error', 'M3 volume must not exceed 20 characters.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
+        if ($description && mb_strlen($description) > 1000) {
+            Session::setFlash('error', 'Description must not exceed 1000 characters.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
+
         try {
             $db = Database::getConnection();
             $db->beginTransaction();
 
-            // 2. Generate unique stock_id
+            // 2. Generate unique stock_id using random_int() and max attempts limit
             $stock_id = '';
             $prefix = ($stock_type === 'Auction') ? 'AUC-' : 'ST-';
             $is_unique = false;
-            while (!$is_unique) {
-                $rand = rand(1000, 9999);
+            $attempts = 0;
+            $maxAttempts = 100;
+            while (!$is_unique && $attempts < $maxAttempts) {
+                $attempts++;
+                $rand = random_int(1000, 9999);
                 $stock_id = $prefix . $rand;
                 $chk = $db->prepare("SELECT id FROM vehicles WHERE stock_id = ?");
                 $chk->execute([$stock_id]);
@@ -161,25 +192,38 @@ class InventoryController extends AdminController {
                     $is_unique = true;
                 }
             }
+            if (!$is_unique) {
+                throw new \Exception("Failed to generate a unique stock ID after {$maxAttempts} attempts.");
+            }
 
             // 3. Handle Inspection PDF upload
             $damage_report_url = null;
             if (isset($_FILES['inspection_pdf']) && $_FILES['inspection_pdf']['error'] === UPLOAD_ERR_OK) {
                 $fileTmpPath = $_FILES['inspection_pdf']['tmp_name'];
                 $fileName = $_FILES['inspection_pdf']['name'];
-                $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                
+                // File size check: limit to 10MB
+                if ($_FILES['inspection_pdf']['size'] > 10 * 1024 * 1024) {
+                    throw new \Exception("The inspection report file exceeds the 10MB size limit.");
+                }
 
-                if ($fileExtension === 'pdf') {
-                    $uploadFileDir = ROOT_DIR . '/public/uploads/vehicles/';
-                    if (!is_dir($uploadFileDir)) {
-                        mkdir($uploadFileDir, 0755, true);
-                    }
-                    $newFileName = 'report_' . $stock_id . '_' . time() . '.pdf';
-                    $dest_path = $uploadFileDir . $newFileName;
+                // MIME type check: must be application/pdf
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mimeType = finfo_file($finfo, $fileTmpPath);
+                finfo_close($finfo);
+                if ($mimeType !== 'application/pdf') {
+                    throw new \Exception("Invalid file type. The inspection report must be a PDF file.");
+                }
 
-                    if (move_uploaded_file($fileTmpPath, $dest_path)) {
-                        $damage_report_url = '/public/uploads/vehicles/' . $newFileName;
-                    }
+                $uploadFileDir = ROOT_DIR . '/public/uploads/vehicles/';
+                if (!is_dir($uploadFileDir)) {
+                    mkdir($uploadFileDir, 0755, true);
+                }
+                $newFileName = 'report_' . $stock_id . '_' . time() . '.pdf';
+                $dest_path = $uploadFileDir . $newFileName;
+
+                if (move_uploaded_file($fileTmpPath, $dest_path)) {
+                    $damage_report_url = '/public/uploads/vehicles/' . $newFileName;
                 }
             }
 
@@ -296,7 +340,12 @@ class InventoryController extends AdminController {
     }
 
     public function delete($id) {
-        $this->validateCsrf();
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'CSRF verification failed.'], 403);
+            return;
+        }
         
         try {
             $db = Database::getConnection();
@@ -345,7 +394,12 @@ class InventoryController extends AdminController {
     }
 
     public function toggleFeatured($id) {
-        $this->validateCsrf();
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            $this->jsonResponse(['status' => 'error', 'message' => 'CSRF verification failed.'], 403);
+            return;
+        }
 
         try {
             $db = Database::getConnection();
@@ -447,7 +501,13 @@ class InventoryController extends AdminController {
     }
 
     public function update($id) {
-        $this->validateCsrf();
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/admin/inventory/edit/' . $id);
+            return;
+        }
 
         try {
             $db = Database::getConnection();
@@ -518,6 +578,28 @@ class InventoryController extends AdminController {
                 return;
             }
 
+            // Length validation checks
+            if (mb_strlen($make) > 50 || mb_strlen($model) > 50 || mb_strlen($chassis) > 50 || mb_strlen($grade) > 50 || mb_strlen($color) > 50 || mb_strlen($dimension) > 50) {
+                Session::setFlash('error', 'Fields make, model, chassis, grade, color, and dimension must not exceed 50 characters.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+            if (mb_strlen($location) > 100) {
+                Session::setFlash('error', 'Location must not exceed 100 characters.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+            if (mb_strlen($m3) > 20) {
+                Session::setFlash('error', 'M3 volume must not exceed 20 characters.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+            if ($description && mb_strlen($description) > 1000) {
+                Session::setFlash('error', 'Description must not exceed 1000 characters.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+
             $db->beginTransaction();
 
             // 3. Handle Inspection PDF upload
@@ -525,25 +607,35 @@ class InventoryController extends AdminController {
             if (isset($_FILES['inspection_pdf']) && $_FILES['inspection_pdf']['error'] === UPLOAD_ERR_OK) {
                 $fileTmpPath = $_FILES['inspection_pdf']['tmp_name'];
                 $fileName = $_FILES['inspection_pdf']['name'];
-                $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                
+                // File size check: limit to 10MB
+                if ($_FILES['inspection_pdf']['size'] > 10 * 1024 * 1024) {
+                    throw new \Exception("The inspection report file exceeds the 10MB size limit.");
+                }
 
-                if ($fileExtension === 'pdf') {
-                    $uploadFileDir = ROOT_DIR . '/public/uploads/vehicles/';
-                    if (!is_dir($uploadFileDir)) {
-                        mkdir($uploadFileDir, 0755, true);
-                    }
-                    if ($damage_report_url && strpos($damage_report_url, '/public/uploads/') === 0) {
-                        $oldPath = ROOT_DIR . $damage_report_url;
-                        if (file_exists($oldPath)) {
-                            unlink($oldPath);
-                        }
-                    }
-                    $newFileName = 'report_' . $existingCar['stock_id'] . '_' . time() . '.pdf';
-                    $dest_path = $uploadFileDir . $newFileName;
+                // MIME type check: must be application/pdf
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                $mimeType = finfo_file($finfo, $fileTmpPath);
+                finfo_close($finfo);
+                if ($mimeType !== 'application/pdf') {
+                    throw new \Exception("Invalid file type. The inspection report must be a PDF file.");
+                }
 
-                    if (move_uploaded_file($fileTmpPath, $dest_path)) {
-                        $damage_report_url = '/public/uploads/vehicles/' . $newFileName;
+                $uploadFileDir = ROOT_DIR . '/public/uploads/vehicles/';
+                if (!is_dir($uploadFileDir)) {
+                    mkdir($uploadFileDir, 0755, true);
+                }
+                if ($damage_report_url && strpos($damage_report_url, '/public/uploads/') === 0) {
+                    $oldPath = ROOT_DIR . $damage_report_url;
+                    if (file_exists($oldPath)) {
+                        unlink($oldPath);
                     }
+                }
+                $newFileName = 'report_' . $existingCar['stock_id'] . '_' . time() . '.pdf';
+                $dest_path = $uploadFileDir . $newFileName;
+
+                if (move_uploaded_file($fileTmpPath, $dest_path)) {
+                    $damage_report_url = '/public/uploads/vehicles/' . $newFileName;
                 }
             }
 
@@ -640,16 +732,26 @@ class InventoryController extends AdminController {
                     if ($_FILES['images']['error'][$i] === UPLOAD_ERR_OK) {
                         $fileTmpPath = $_FILES['images']['tmp_name'][$i];
                         $fileName = $_FILES['images']['name'][$i];
+                        
+                        // File size check: limit to 5MB
+                        if ($_FILES['images']['size'][$i] > 5 * 1024 * 1024) {
+                            throw new \Exception("Vehicle image {$fileName} exceeds the 5MB size limit.");
+                        }
+
+                        // MIME type check: must be jpeg, png, webp
+                        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                        $mimeType = finfo_file($finfo, $fileTmpPath);
+                        finfo_close($finfo);
+                        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/webp'])) {
+                            throw new \Exception("Vehicle image {$fileName} has an invalid file format (only JPG, PNG, and WebP are allowed).");
+                        }
+
                         $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                        $newFileName = 'img_' . $existingCar['stock_id'] . '_u' . $i . '_' . time() . '.' . $fileExtension;
+                        $dest_path = $uploadFileDir . $newFileName;
 
-                        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-                        if (in_array($fileExtension, $allowedExtensions)) {
-                            $newFileName = 'img_' . $existingCar['stock_id'] . '_u' . $i . '_' . time() . '.' . $fileExtension;
-                            $dest_path = $uploadFileDir . $newFileName;
-
-                            if (move_uploaded_file($fileTmpPath, $dest_path)) {
-                                $uploadedImages[] = '/public/uploads/vehicles/' . $newFileName;
-                            }
+                        if (move_uploaded_file($fileTmpPath, $dest_path)) {
+                            $uploadedImages[] = '/public/uploads/vehicles/' . $newFileName;
                         }
                     }
                 }
@@ -669,7 +771,7 @@ class InventoryController extends AdminController {
             $this->redirect('/admin/inventory');
 
         } catch (\Exception $e) {
-            if ($db->inTransaction()) {
+            if (isset($db) && $db->inTransaction()) {
                 $db->rollBack();
             }
             Session::setFlash('error', 'Error updating vehicle: ' . $e->getMessage());
