@@ -346,6 +346,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         setTimeout(() => {
                             window.location.reload();
                         }, 1500);
+                    } else if (data.status === 'info') {
+                        toastr.info(data.message, 'Under Development');
                     } else {
                         toastr.error(data.message || 'Synchronization failed.', 'Error');
                     }
