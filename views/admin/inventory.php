@@ -204,26 +204,7 @@ foreach ($cars as $car) {
                                     ?>
                                         <img src="<?= BASE_URL . htmlspecialchars($car['image']) ?>" alt="Vehicle" style="width: 100%; height: 100%; object-fit: cover;">
                                     <?php else: ?>
-                                        <!-- Exact replica of user's uploaded car silhouette placeholder -->
-                                        <svg viewBox="0 0 100 65" style="width: 100%; height: 100%; background: #f0f0f3;" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M 16,42 C 14,35 15,31 22,27 C 32,21 48,19 62,19 C 73,19 82,24 87,31 C 89,34 90,37 90,41 L 90,46 L 81,46 C 80,41 75,37 70,37 C 65,37 60,41 59,46 L 41,46 C 40,41 35,37 30,37 C 25,37 20,41 19,46 L 13,46 C 12,46 12,45 13,44 C 14,43 15,42 16,42 Z" fill="#9ea1a6" />
-                                            <path d="M 38,22 C 45,22 52,22 59,22 L 59,30 L 36,30 Q 35,26 38,22 Z" fill="#f0f0f3" />
-                                            <path d="M 61,22 C 68,22 75,22 78,27 C 80,30 81,30 81,30 L 61,30 Z" fill="#f0f0f3" />
-                                            <path d="M 14,33 C 16,33 22,34 26,30 C 25,31 18,35 14,35 C 13,35 13,34 14,33 Z" fill="#f0f0f3" />
-                                            <path d="M 17,37 L 24,37 C 22,41 18,41 17,39 Z" fill="#f0f0f3" />
-                                            <circle cx="30" cy="46" r="7.5" fill="#f0f0f3" stroke="#9ea1a6" stroke-width="2.5" />
-                                            <circle cx="30" cy="46" r="3.5" fill="#9ea1a6" />
-                                            <line x1="30" y1="38.5" x2="30" y2="53.5" stroke="#f0f0f3" stroke-width="1.2" />
-                                            <line x1="22.5" y1="46" x2="37.5" y2="46" stroke="#f0f0f3" stroke-width="1.2" />
-                                            <line x1="24.7" y1="40.7" x2="35.3" y2="51.3" stroke="#f0f0f3" stroke-width="1.2" />
-                                            <line x1="24.7" y1="51.3" x2="35.3" y2="40.7" stroke="#f0f0f3" stroke-width="1.2" />
-                                            <circle cx="70" cy="46" r="7.5" fill="#f0f0f3" stroke="#9ea1a6" stroke-width="2.5" />
-                                            <circle cx="70" cy="46" r="3.5" fill="#9ea1a6" />
-                                            <line x1="70" y1="38.5" x2="70" y2="53.5" stroke="#f0f0f3" stroke-width="1.2" />
-                                            <line x1="62.5" y1="46" x2="77.5" y2="46" stroke="#f0f0f3" stroke-width="1.2" />
-                                            <line x1="64.7" y1="40.7" x2="75.3" y2="51.3" stroke="#f0f0f3" stroke-width="1.2" />
-                                            <line x1="64.7" y1="51.3" x2="75.3" y2="40.7" stroke="#f0f0f3" stroke-width="1.2" />
-                                        </svg>
+                                        <img src="<?= BASE_URL ?>/public/image/car-placeholder.png" alt="No Image" style="width: 100%; height: 100%; object-fit: cover;">
                                     <?php endif; ?>
                                 </div>
                                 <div>
