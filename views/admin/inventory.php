@@ -183,8 +183,12 @@ foreach ($cars as $car) {
                         </td>
                         <td>
                             <div style="display: flex; align-items: center; gap: 12px;">
-                                <div class="vehicle-thumbnail">
-                                    <i data-lucide="car"></i>
+                                <div class="vehicle-thumbnail" style="display: flex; align-items: center; justify-content: center; width: 48px; height: 36px; background: var(--color-bg-dark); border-radius: 4px; overflow: hidden;">
+                                    <?php if (!empty($car['image'])): ?>
+                                        <img src="<?= BASE_URL . htmlspecialchars($car['image']) ?>" alt="Vehicle" style="width: 100%; height: 100%; object-fit: cover;">
+                                    <?php else: ?>
+                                        <i data-lucide="car" style="color: var(--color-text-muted); width: 20px; height: 20px;"></i>
+                                    <?php endif; ?>
                                 </div>
                                 <div>
                                     <strong><?= htmlspecialchars($car['make'] . ' ' . $car['model']) ?></strong>
@@ -202,10 +206,15 @@ foreach ($cars as $car) {
                         <td>
                             <?php 
                             $badge = 'badge-active';
+                            $extraStyle = '';
                             if ($car['status'] === 'Reserved') $badge = 'badge-warning';
                             else if ($car['status'] === 'Sold') $badge = 'badge-danger';
+                            else if ($car['status'] === 'Archived') {
+                                $badge = 'badge-outline';
+                                $extraStyle = 'background-color: #718096; color: white; border: none;';
+                            }
                             ?>
-                            <span class="badge <?= $badge ?>"><?= $car['status'] ?></span>
+                            <span class="badge <?= $badge ?>" style="<?= $extraStyle ?>"><?= $car['status'] ?></span>
                         </td>
                         <td>
                             <label class="switch-toggle">

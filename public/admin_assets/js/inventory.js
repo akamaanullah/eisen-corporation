@@ -125,7 +125,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.duplicate-car-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const row = this.closest('tr');
+            const carId = row.getAttribute('data-db-id');
             const carName = row.querySelector('td:nth-child(2) strong').textContent;
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             
             Swal.fire({
                 title: 'Duplicate Listing?',
@@ -137,11 +139,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 confirmButtonText: 'Yes, duplicate'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Duplicated!',
-                        text: `Successfully created duplicate copy of "${carName}".`,
-                        icon: 'success',
-                        confirmButtonColor: 'var(--color-navy-700)'
+                    const formData = new FormData();
+                    formData.append('csrf_token', csrfToken);
+
+                    fetch(window.BASE_URL + '/admin/inventory/duplicate/' + carId, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(res => {
+                        if (!res.ok) throw new Error('Network response not ok');
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'success') {
+                            Swal.fire({
+                                title: 'Duplicated!',
+                                text: data.message,
+                                icon: 'success',
+                                confirmButtonColor: 'var(--color-navy-700)'
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire({
+                                title: 'Error!',
+                                text: data.message || 'Failed to duplicate listing.',
+                                icon: 'error',
+                                confirmButtonColor: 'var(--color-navy-700)'
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        Swal.fire({
+                            title: 'Error!',
+                            text: 'Failed to duplicate listing (CSRF or Network Error).',
+                            icon: 'error',
+                            confirmButtonColor: 'var(--color-navy-700)'
+                        });
                     });
                 }
             });
@@ -151,7 +185,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.archive-car-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const row = this.closest('tr');
+            const carId = row.getAttribute('data-db-id');
             const carName = row.querySelector('td:nth-child(2) strong').textContent;
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             
             Swal.fire({
                 title: 'Archive Vehicle?',
@@ -163,11 +199,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 confirmButtonText: 'Archive Listing'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    Swal.fire({
-                        title: 'Archived!',
-                        text: `"${carName}" has been successfully archived.`,
-                        icon: 'success',
-                        confirmButtonColor: 'var(--color-navy-700)'
+                    const formData = new FormData();
+                    formData.append('csrf_token', csrfToken);
+
+                    fetch(window.BASE_URL + '/admin/inventory/archive/' + carId, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(res => {
+                        if (!res.ok) throw new Error('Network response not ok');
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'success') {
+                            Swal.fire({
+                                title: 'Archived!',
+                                text: data.message,
+                                icon: 'success',
+                                confirmButtonColor: 'var(--color-navy-700)'
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire({
+                                title: 'Error!',
+                                text: data.message || 'Failed to archive listing.',
+                                icon: 'error',
+                                confirmButtonColor: 'var(--color-navy-700)'
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        Swal.fire({
+                            title: 'Error!',
+                            text: 'Failed to archive listing (CSRF or Network Error).',
+                            icon: 'error',
+                            confirmButtonColor: 'var(--color-navy-700)'
+                        });
                     });
                 }
             });
@@ -243,6 +311,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const syncBtn = document.getElementById('syncAuctionsBtn');
     if (syncBtn) {
         syncBtn.addEventListener('click', function() {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            
             Swal.fire({
                 title: 'Synchronizing Auctions',
                 html: 'Connecting to <strong>jpcenter.ru</strong> API feeds...',
@@ -253,13 +323,36 @@ document.addEventListener('DOMContentLoaded', function() {
                     Swal.showLoading();
                 }
             }).then((result) => {
-                toastr.options = {
-                    "closeButton": true,
-                    "progressBar": true,
-                    "positionClass": "toast-top-right",
-                    "timeOut": "4000"
-                };
-                toastr.success('Synchronized 142 new Japan auction lots successfully!', 'API Sync Complete');
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+
+                fetch(window.BASE_URL + '/admin/inventory/sync-auctions', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response not ok');
+                    return res.json();
+                })
+                .then(data => {
+                    toastr.options = {
+                        "closeButton": true,
+                        "progressBar": true,
+                        "positionClass": "toast-top-right",
+                        "timeOut": "4000"
+                    };
+                    if (data.status === 'success') {
+                        toastr.success(data.message, 'API Sync Complete');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1500);
+                    } else {
+                        toastr.error(data.message || 'Synchronization failed.', 'Error');
+                    }
+                })
+                .catch(err => {
+                    toastr.error('Failed to sync auction lots (CSRF or Network Error).', 'Error');
+                });
             });
         });
     }

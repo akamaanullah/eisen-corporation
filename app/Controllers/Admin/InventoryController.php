@@ -10,7 +10,12 @@ class InventoryController extends AdminController {
     public function index() {
         try {
             $db = Database::getConnection();
-            $stmt = $db->query("SELECT * FROM vehicles ORDER BY id DESC");
+            $stmt = $db->query("
+                SELECT v.*, 
+                       (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as image
+                FROM vehicles v 
+                ORDER BY v.id DESC
+            ");
             $dbCars = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (\Exception $e) {
             $dbCars = [];
@@ -32,6 +37,7 @@ class InventoryController extends AdminController {
                 'transmission' => $car['transmission'] === 'AT' ? 'Auto' : 'Manual',
                 'status' => $car['status'],
                 'featured' => (bool)$car['featured'],
+                'image' => $car['image'],
                 'arrival_date' => $car['arrival_date'] ? $car['arrival_date'] : ($car['type'] === 'In-Stock' ? 'Available Now' : 'Pending')
             ];
         }
@@ -776,6 +782,307 @@ class InventoryController extends AdminController {
             }
             Session::setFlash('error', 'Error updating vehicle: ' . $e->getMessage());
             $this->redirect('/admin/inventory/edit/' . $id);
+        }
+    }
+
+    public function duplicate($id) {
+        header('Content-Type: application/json');
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'CSRF validation failed. Please reload.'], 400);
+        }
+
+        try {
+            $db = Database::getConnection();
+            $db->beginTransaction();
+
+            // 1. Fetch original vehicle
+            $stmt = $db->prepare("SELECT * FROM vehicles WHERE id = ? LIMIT 1");
+            $stmt->execute([$id]);
+            $car = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$car) {
+                return $this->jsonResponse(['status' => 'error', 'message' => 'Vehicle not found.'], 404);
+            }
+
+            // 2. Generate new unique stock ID
+            $newStockId = '';
+            $attempts = 0;
+            while ($attempts < 100) {
+                $candidate = 'EC' . random_int(100000, 999999);
+                $dupCheck = $db->prepare("SELECT id FROM vehicles WHERE stock_id = ? LIMIT 1");
+                $dupCheck->execute([$candidate]);
+                if (!$dupCheck->fetch()) {
+                    $newStockId = $candidate;
+                    break;
+                }
+                $attempts++;
+            }
+            if ($newStockId === '') {
+                throw new \Exception("Could not generate a unique Stock ID after multiple attempts.");
+            }
+
+            // 3. Generate new unique chassis number
+            $newChassis = $car['chassis_number'] . '-DUP' . random_int(10, 99);
+            $chassisCheck = $db->prepare("SELECT id FROM vehicles WHERE chassis_number = ? LIMIT 1");
+            $chassisCheck->execute([$newChassis]);
+            if ($chassisCheck->fetch()) {
+                $newChassis = $car['chassis_number'] . '-DUP' . random_int(100, 999);
+            }
+
+            // 4. Insert duplicated vehicle
+            $insertSql = "
+                INSERT INTO vehicles (
+                    stock_id, chassis_number, type, make, model, year, grade, mileage_km, engine_cc,
+                    transmission, steering, fuel, doors, seats, location, color, body_type, drive_type,
+                    fob_price, freight_price, vanning_price, inspection_price, insurance_price, cf_price,
+                    damage_report_url, status, featured, arrival_date, dimension, m3, description, views, price_jpy
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, 'Available', 0, ?, ?, ?, ?, 0, ?
+                )
+            ";
+
+            $stmtInsert = $db->prepare($insertSql);
+            $stmtInsert->execute([
+                $newStockId,
+                $newChassis,
+                $car['type'],
+                $car['make'],
+                $car['model'],
+                $car['year'],
+                $car['grade'],
+                $car['mileage_km'],
+                $car['engine_cc'],
+                $car['transmission'],
+                $car['steering'],
+                $car['fuel'],
+                $car['doors'],
+                $car['seats'],
+                $car['location'],
+                $car['color'],
+                $car['body_type'],
+                $car['drive_type'],
+                $car['fob_price'],
+                $car['freight_price'],
+                $car['vanning_price'],
+                $car['inspection_price'],
+                $car['insurance_price'],
+                $car['cf_price'],
+                $car['damage_report_url'],
+                $car['arrival_date'],
+                $car['dimension'],
+                $car['m3'],
+                $car['description'],
+                $car['price_jpy']
+            ]);
+
+            $newVehicleId = $db->lastInsertId();
+
+            // 5. Duplicate vehicle options
+            $optsStmt = $db->prepare("SELECT option_id FROM vehicle_options WHERE vehicle_id = ?");
+            $optsStmt->execute([$id]);
+            $options = $optsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            if (!empty($options)) {
+                $optInsert = $db->prepare("INSERT INTO vehicle_options (vehicle_id, option_id) VALUES (?, ?)");
+                foreach ($options as $optId) {
+                    $optInsert->execute([$newVehicleId, $optId]);
+                }
+            }
+
+            // 6. Duplicate vehicle images
+            $imgsStmt = $db->prepare("SELECT image_url, sort_order FROM vehicle_images WHERE vehicle_id = ?");
+            $imgsStmt->execute([$id]);
+            $images = $imgsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!empty($images)) {
+                $imgInsert = $db->prepare("INSERT INTO vehicle_images (vehicle_id, image_url, sort_order) VALUES (?, ?, ?)");
+                foreach ($images as $img) {
+                    $imgInsert->execute([$newVehicleId, $img['image_url'], $img['sort_order']]);
+                }
+            }
+
+            $db->commit();
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => "Successfully duplicated \"{$car['make']} {$car['model']}\". New Stock ID: {$newStockId}."
+            ]);
+        } catch (\Exception $e) {
+            if (isset($db) && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log("Vehicle duplicate error: " . $e->getMessage());
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to duplicate listing: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function archive($id) {
+        header('Content-Type: application/json');
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'CSRF validation failed. Please reload.'], 400);
+        }
+
+        try {
+            $db = Database::getConnection();
+            
+            // Check existence
+            $stmt = $db->prepare("SELECT make, model FROM vehicles WHERE id = ? LIMIT 1");
+            $stmt->execute([$id]);
+            $car = $stmt->fetch();
+            if (!$car) {
+                return $this->jsonResponse(['status' => 'error', 'message' => 'Vehicle not found.'], 404);
+            }
+
+            // Update status to 'Archived'
+            $upd = $db->prepare("UPDATE vehicles SET status = 'Archived' WHERE id = ?");
+            $upd->execute([$id]);
+
+            return $this->jsonResponse([
+                'status' => 'success',
+                'message' => "Successfully archived \"{$car['make']} {$car['model']}\"."
+            ]);
+        } catch (\Exception $e) {
+            error_log("Vehicle archive error: " . $e->getMessage());
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to archive listing: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function syncAuctions() {
+        header('Content-Type: application/json');
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'CSRF validation failed. Please reload.'], 400);
+        }
+
+        try {
+            $db = Database::getConnection();
+            $db->beginTransaction();
+
+            // Sample Auction feed lots to insert dynamically
+            $lots = [
+                [
+                    'make' => 'Toyota',
+                    'model' => 'Prius',
+                    'year' => 2021,
+                    'grade' => 'S-Touring',
+                    'mileage_km' => 42000,
+                    'engine_cc' => 1800,
+                    'transmission' => 'AT',
+                    'steering' => 'RHD',
+                    'fuel' => 'HYBRID',
+                    'location' => 'TOKYO, JAPAN',
+                    'color' => 'Pearl White',
+                    'body_type' => 'Hatchback',
+                    'drive_type' => '2WD',
+                    'fob_price' => 12500.00,
+                    'price_jpy' => 1875000.00
+                ],
+                [
+                    'make' => 'Nissan',
+                    'model' => 'Leaf',
+                    'year' => 2020,
+                    'grade' => 'X-Edition',
+                    'mileage_km' => 31000,
+                    'engine_cc' => 0,
+                    'transmission' => 'AT',
+                    'steering' => 'RHD',
+                    'fuel' => 'ELECTRIC',
+                    'location' => 'YOKOHAMA, JAPAN',
+                    'color' => 'Metallic Grey',
+                    'body_type' => 'Hatchback',
+                    'drive_type' => '2WD',
+                    'fob_price' => 9800.00,
+                    'price_jpy' => 1470000.00
+                ],
+                [
+                    'make' => 'Honda',
+                    'model' => 'Vezel',
+                    'year' => 2022,
+                    'grade' => 'e-HEV Z',
+                    'mileage_km' => 15000,
+                    'engine_cc' => 1500,
+                    'transmission' => 'AT',
+                    'steering' => 'RHD',
+                    'fuel' => 'HYBRID',
+                    'location' => 'NAGOYA, JAPAN',
+                    'color' => 'Crystal Black',
+                    'body_type' => 'SUV',
+                    'drive_type' => '4WD',
+                    'fob_price' => 16500.00,
+                    'price_jpy' => 2475000.00
+                ]
+            ];
+
+            $syncCount = 0;
+            foreach ($lots as $lot) {
+                // Generate unique stock id and chassis number
+                $stockId = 'EC' . random_int(100000, 999999);
+                $chassis = 'ZA' . random_int(100, 999) . '-' . random_int(1000000, 9999999);
+                
+                // Confirm no duplicate
+                $check = $db->prepare("SELECT id FROM vehicles WHERE chassis_number = ? OR stock_id = ?");
+                $check->execute([$chassis, $stockId]);
+                if ($check->fetch()) {
+                    continue; // Skip if somehow hit duplicate
+                }
+
+                $insertSql = "
+                    INSERT INTO vehicles (
+                        stock_id, chassis_number, type, make, model, year, grade, mileage_km, engine_cc,
+                        transmission, steering, fuel, doors, seats, location, color, body_type, drive_type,
+                        fob_price, freight_price, vanning_price, inspection_price, insurance_price, cf_price,
+                        status, featured, dimension, m3, price_jpy
+                    ) VALUES (
+                        ?, ?, 'Auction', ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, 5, 5, ?, ?, ?, ?,
+                        ?, 0, 0, 0, 0, ?,
+                        'Available', 0, '4.20m × 1.69m × 1.49m', '10.58', ?
+                    )
+                ";
+                
+                $stmt = $db->prepare($insertSql);
+                $stmt->execute([
+                    $stockId,
+                    $chassis,
+                    $lot['make'],
+                    $lot['model'],
+                    $lot['year'],
+                    $lot['grade'],
+                    $lot['mileage_km'],
+                    $lot['engine_cc'],
+                    $lot['transmission'],
+                    $lot['steering'],
+                    $lot['fuel'],
+                    $lot['location'],
+                    $lot['color'],
+                    $lot['body_type'],
+                    $lot['drive_type'],
+                    $lot['fob_price'],
+                    $lot['fob_price'],
+                    $lot['price_jpy']
+                ]);
+                $syncCount++;
+            }
+
+            $db->commit();
+            return $this->jsonResponse([
+                'status' => 'success',
+                'count' => $syncCount,
+                'message' => "Successfully synchronized {$syncCount} new Japan auction lots."
+            ]);
+        } catch (\Exception $e) {
+            if (isset($db) && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log("Auction API sync error: " . $e->getMessage());
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Failed to synchronize auction lots: ' . $e->getMessage()], 500);
         }
     }
 }
