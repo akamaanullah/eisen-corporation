@@ -126,9 +126,6 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const row = this.closest('tr');
             const carId = row.getAttribute('data-db-id');
-            const carName = row.querySelector('td:nth-child(2) strong').textContent;
-            
-            toastr.info(`Redirecting to edit form for "${carName}"...`, 'Edit Action');
             window.location.href = window.BASE_URL + '/admin/inventory/edit/' + carId;
         });
     });
