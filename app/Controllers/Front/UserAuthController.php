@@ -418,23 +418,36 @@ class UserAuthController extends Controller {
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
-            // Only proceed if user exists and is a registered buyer (not admin/staff)
-            if ($user && $user['role'] === 'registered_buyer') {
-                $token = bin2hex(random_bytes(32));
-                $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour expiry
-
-                $upd = $db->prepare("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?");
-                $upd->execute([$token, $expires, $user['id']]);
-
-                Mailer::sendPasswordReset($email, BASE_URL . '/reset-password?token=' . urlencode($token));
+            if (!$user) {
+                Session::setFlash('error', 'No account exists with this email address.');
+                $this->redirect('/forgot-password');
+                return;
             }
+
+            // Only proceed if user is a registered buyer (not admin/staff)
+            if ($user['role'] !== 'registered_buyer') {
+                Session::setFlash('error', 'Control Room staff must reset their password via the Admin Control Room.');
+                $this->redirect('/forgot-password');
+                return;
+            }
+
+            $token = bin2hex(random_bytes(32));
+            $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour expiry
+
+            $upd = $db->prepare("UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?");
+            $upd->execute([$token, $expires, $user['id']]);
+
+            Mailer::sendPasswordReset($email, BASE_URL . '/reset-password?token=' . urlencode($token));
+
+            Session::setFlash('success', 'Reset link has been successfully sent to your email.');
+            $this->redirect('/forgot-password');
+            return;
         } catch (\Exception $e) {
             error_log('User Forgot password error: ' . $e->getMessage());
+            Session::setFlash('error', 'An error occurred while processing your request. Please try again.');
+            $this->redirect('/forgot-password');
+            return;
         }
-
-        // Always show success to prevent email enumeration
-        Session::setFlash('success', 'If an account exists for that email, a reset link has been sent.');
-        $this->redirect('/forgot-password');
     }
 
     public function showResetPasswordForm() {

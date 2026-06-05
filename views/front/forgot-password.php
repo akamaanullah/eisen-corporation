@@ -16,7 +16,7 @@
             </div>
           <?php endif; ?>
 
-          <form class="login-form" action="<?= BASE_URL ?>/forgot-password" method="POST" novalidate>
+          <form class="login-form" id="forgot-password-form" action="<?= BASE_URL ?>/forgot-password" method="POST" novalidate>
             <?= $this->csrf_field() ?>
             <div class="form-field">
               <label class="form-label" for="forgot-email" data-i18n="auth.email">Email</label>
@@ -31,7 +31,7 @@
               />
             </div>
 
-            <button class="btn btn--primary btn--block login-form__submit" type="submit" data-i18n="auth.forgot.submit">Send reset link</button>
+            <button class="btn btn--primary btn--block login-form__submit" id="submit-btn" type="submit" data-i18n="auth.forgot.submit">Send reset link</button>
           </form>
 
           <p class="login-back">
@@ -42,5 +42,74 @@
     </section>
 
   </main>
+
+  <style>
+    /* Premium Alert Styling */
+    .login-flash {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .login-flash--success {
+      background-color: #f0fff4;
+      border: 1px solid #c6f6d5;
+      color: #22543d;
+    }
+    .login-flash--error {
+      background-color: #fff5f5;
+      border: 1px solid #fed7d7;
+      color: #742a2a;
+    }
+
+    /* Premium Button Loading Spinner */
+    .btn-loading {
+      position: relative;
+      color: transparent !important;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    .btn-loading::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      top: 50%;
+      left: 50%;
+      margin-top: -10px;
+      margin-left: -10px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #ffffff;
+      animation: spin 0.8s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const form = document.getElementById("forgot-password-form");
+      const submitBtn = document.getElementById("submit-btn");
+      const emailInput = document.getElementById("forgot-email");
+
+      if (form && submitBtn && emailInput) {
+        form.addEventListener("submit", function (e) {
+          // Native pattern check or trim check
+          const emailVal = emailInput.value.trim();
+          if (!emailVal || !emailInput.checkValidity()) {
+            // Let HTML5 validator show browser-native tooltip
+            return;
+          }
+
+          // Disable and show premium spinner
+          submitBtn.disabled = true;
+          submitBtn.classList.add("btn-loading");
+        });
+      }
+    });
+  </script>
 
 <?php include dirname(__DIR__) . '/front/partials/footer.php'; ?>
