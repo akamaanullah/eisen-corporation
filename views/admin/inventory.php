@@ -197,11 +197,21 @@ foreach ($cars as $car) {
                         </td>
                         <td>
                             <div style="display: flex; align-items: center; gap: 12px;">
-                                <div class="vehicle-thumbnail" style="display: flex; align-items: center; justify-content: center; width: 48px; height: 36px; background: var(--color-bg-dark); border-radius: 4px; overflow: hidden;">
-                                    <?php if (!empty($car['image'])): ?>
+                                <div class="vehicle-thumbnail" style="display: flex; align-items: center; justify-content: center; width: 48px; height: 36px; background: var(--color-bg-dark); border-radius: 4px; overflow: hidden; border: 1px solid var(--color-border);">
+                                    <?php 
+                                    $hasValidImage = !empty($car['image']) && strpos($car['image'], '/public/uploads/') !== false;
+                                    if ($hasValidImage): 
+                                    ?>
                                         <img src="<?= BASE_URL . htmlspecialchars($car['image']) ?>" alt="Vehicle" style="width: 100%; height: 100%; object-fit: cover;">
                                     <?php else: ?>
-                                        <i data-lucide="car" style="color: var(--color-text-muted); width: 20px; height: 20px;"></i>
+                                        <!-- Premium dark-themed SVG car silhouette placeholder -->
+                                        <svg viewBox="0 0 100 60" style="width: 100%; height: 100%; background: #0b1528;" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M 12,36 L 18,33 Q 25,23 38,21 L 62,21 Q 72,21 82,30 L 88,33 Q 91,35 91,38 L 91,44 L 83,44 Q 83,39 78,39 Q 73,39 73,44 L 27,44 Q 27,39 22,39 Q 17,39 17,44 L 9,44 L 9,39 Q 9,36 12,36 Z" fill="#2d3748" />
+                                            <circle cx="22" cy="44" r="4.5" fill="#4a5568" />
+                                            <circle cx="22" cy="44" r="1.5" fill="#0b1528" />
+                                            <circle cx="78" cy="44" r="4.5" fill="#4a5568" />
+                                            <circle cx="78" cy="44" r="1.5" fill="#0b1528" />
+                                        </svg>
                                     <?php endif; ?>
                                 </div>
                                 <div>
