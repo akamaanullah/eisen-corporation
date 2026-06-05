@@ -197,20 +197,23 @@ foreach ($cars as $car) {
                         </td>
                         <td>
                             <div style="display: flex; align-items: center; gap: 12px;">
-                                <div class="vehicle-thumbnail" style="display: flex; align-items: center; justify-content: center; width: 48px; height: 36px; background: var(--color-bg-dark); border-radius: 4px; overflow: hidden; border: 1px solid var(--color-border);">
+                                <div class="vehicle-thumbnail" style="display: flex; align-items: center; justify-content: center; width: 48px; height: 36px; background: #ebebeb; border-radius: 4px; overflow: hidden; border: 1px solid var(--color-border);">
                                     <?php 
                                     $hasValidImage = !empty($car['image']) && strpos($car['image'], '/public/uploads/') !== false;
                                     if ($hasValidImage): 
                                     ?>
                                         <img src="<?= BASE_URL . htmlspecialchars($car['image']) ?>" alt="Vehicle" style="width: 100%; height: 100%; object-fit: cover;">
                                     <?php else: ?>
-                                        <!-- Premium dark-themed SVG car silhouette placeholder -->
-                                        <svg viewBox="0 0 100 60" style="width: 100%; height: 100%; background: #0b1528;" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M 12,36 L 18,33 Q 25,23 38,21 L 62,21 Q 72,21 82,30 L 88,33 Q 91,35 91,38 L 91,44 L 83,44 Q 83,39 78,39 Q 73,39 73,44 L 27,44 Q 27,39 22,39 Q 17,39 17,44 L 9,44 L 9,39 Q 9,36 12,36 Z" fill="#2d3748" />
-                                            <circle cx="22" cy="44" r="4.5" fill="#4a5568" />
-                                            <circle cx="22" cy="44" r="1.5" fill="#0b1528" />
-                                            <circle cx="78" cy="44" r="4.5" fill="#4a5568" />
-                                            <circle cx="78" cy="44" r="1.5" fill="#0b1528" />
+                                        <!-- Exact replica of user's uploaded "No Image" placeholder -->
+                                        <svg viewBox="0 0 100 70" style="width: 100%; height: 100%; background: #ebebeb;" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M 15,35 C 17,29 25,23 38,20 C 43,20 52,20 60,20 C 73,20 81,28 85,34 C 87,37 88,40 88,43 L 88,46 L 81,46 C 80,41 75,37 70,37 C 65,37 60,41 59,46 L 41,46 C 40,41 35,37 30,37 C 25,37 20,41 19,46 L 12,46 L 12,42 C 12,38 13,36 15,35 Z" fill="#b0b0b0" />
+                                            <path d="M 39,23 L 52,23 L 52,31 L 37,31 Q 36,27 39,23 Z" fill="#ebebeb" />
+                                            <path d="M 55,23 L 66,23 Q 72,23 76,29 L 77,31 L 55,31 Z" fill="#ebebeb" />
+                                            <circle cx="30" cy="46" r="6.5" fill="#ebebeb" stroke="#b0b0b0" stroke-width="2.5" />
+                                            <circle cx="30" cy="46" r="3" fill="#ebebeb" />
+                                            <circle cx="70" cy="46" r="6.5" fill="#ebebeb" stroke="#b0b0b0" stroke-width="2.5" />
+                                            <circle cx="70" cy="46" r="3" fill="#ebebeb" />
+                                            <text x="50" y="62" font-size="10" font-family="'Segoe UI', sans-serif" font-weight="600" fill="#7d7d7d" text-anchor="middle">No Image</text>
                                         </svg>
                                     <?php endif; ?>
                                 </div>
