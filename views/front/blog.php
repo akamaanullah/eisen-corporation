@@ -1,5 +1,5 @@
 <?php
-$imgBase = 'https://images.unsplash.com/';
+use App\Helpers\ImageUrl;
 ?>
 <?php include __DIR__ . '/partials/header.php'; ?>
 
@@ -26,7 +26,7 @@ $imgBase = 'https://images.unsplash.com/';
               <a href="<?= BASE_URL ?>/blog/<?= htmlspecialchars($featured['slug']) ?>" class="blog-featured__link">
                 <div class="blog-featured__media">
                   <img
-                    src="<?= htmlspecialchars($imgBase . $featured['image'] . '?w=900&q=80') ?>"
+                    src="<?= htmlspecialchars(ImageUrl::resolve($featured['image'], 900)) ?>"
                     alt=""
                     width="900"
                     height="506"
@@ -49,16 +49,7 @@ $imgBase = 'https://images.unsplash.com/';
             </article>
             <?php endif; ?>
 
-            <div class="blog-page__toolbar">
-              <div class="blog-categories" role="group" aria-label="Filter by category" data-blog-categories>
-                <?php foreach ($categories as $cat): ?>
-                <button
-                  type="button"
-                  class="blog-categories__btn<?= $cat['key'] === 'all' ? ' is-active' : '' ?>"
-                  data-category-filter="<?= htmlspecialchars($cat['key']) ?>"
-                ><?= htmlspecialchars($cat['label']) ?></button>
-                <?php endforeach; ?>
-              </div>
+            <div class="blog-page__toolbar" style="justify-content: flex-end;">
               <p class="blog-page__count" data-blog-count aria-live="polite">
                 <span data-blog-count-num><?= count($gridPosts) ?></span>
                 <span data-i18n="blogPage.articles">articles</span>
@@ -71,7 +62,7 @@ $imgBase = 'https://images.unsplash.com/';
                 <a href="<?= BASE_URL ?>/blog/<?= htmlspecialchars($post['slug']) ?>" class="blog-card__link">
                   <div class="blog-card__media">
                     <img
-                      src="<?= htmlspecialchars($imgBase . $post['image'] . '?w=600&q=80') ?>"
+                      src="<?= htmlspecialchars(ImageUrl::resolve($post['image'], 600)) ?>"
                       alt=""
                       width="600"
                       height="360"
@@ -123,7 +114,7 @@ $imgBase = 'https://images.unsplash.com/';
               <ul class="blog-widget__cat-list">
                 <?php foreach ($categories as $cat): ?>
                 <li>
-                  <button type="button" class="blog-widget__cat-btn" data-category-filter="<?= htmlspecialchars($cat['key']) ?>">
+                  <button type="button" class="blog-widget__cat-btn<?= $cat['key'] === 'all' ? ' is-active' : '' ?>" data-category-filter="<?= htmlspecialchars($cat['key']) ?>">
                     <?= htmlspecialchars($cat['label']) ?>
                   </button>
                 </li>

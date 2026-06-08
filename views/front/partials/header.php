@@ -51,7 +51,11 @@ if (!function_exists('eisen_nav_is_active')) {
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Montserrat:ital,wght@0,600;0,700;0,800;1,600;1,700;1,800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="<?= BASE_URL ?>/public/css/global.css" />
+  <link rel="stylesheet" href="<?= BASE_URL ?>/public/css/global.css?v=1.7" />
+  <meta name="csrf-token" content="<?= \App\Core\Session::getCsrfToken() ?>" />
+  <script>
+    window.EisenBaseUrl = <?= json_encode(BASE_URL) ?>;
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main" data-i18n="skip">Skip to content</a>

@@ -625,9 +625,12 @@
     return t("inventory.mileageUnit").replace("{value}", String(k));
   }
 
-  function formatLocation(cityKey) {
-    const city = t(`inventory.city.${cityKey}`);
-    return t("inventory.location").replace("{city}", city);
+  function formatLocation(location) {
+    const value = String(location || "").trim();
+    if (!value || value === "-" || value.toLowerCase() === "n/a") {
+      return "";
+    }
+    return value;
   }
 
   function escapeHtml(value) {
@@ -646,21 +649,27 @@
   }
 
   function renderCard(item) {
-    const mileage = formatMileage(item.mileageK);
-    const location = formatLocation(item.cityKey);
+    const location = formatLocation(item.location);
+    const year =
+      item.year > 0 ? String(item.year) : t("spec.val.na") || "N/A";
 
     return `
       <li>
         <article class="inventory-card">
+          <button type="button" class="inventory-card__favorite-btn${item.isFavorited ? ' is-active' : ''}" data-favorite-toggle data-vehicle-id="${item.id}" aria-label="Toggle favorite">
+            <svg class="inventory-card__favorite-icon" width="18" height="18" viewBox="0 0 24 24">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </button>
           <a href="${(window.BASE_URL || "") + "/product/" + item.stockId}" class="inventory-card__link">
             <div class="inventory-card__media">
               <img src="${item.image}" alt="${escapeHtml(item.alt)}" width="600" height="400" loading="lazy" />
             </div>
             <div class="inventory-card__body">
               <span class="inventory-card__make">${escapeHtml(item.make)}</span>
-              <h3 class="inventory-card__model">${escapeHtml(item.model)}</h3>
-              <p class="inventory-card__price-line"><strong>${escapeHtml(formatListingPrice(item.priceUsd))}</strong> · ${escapeHtml(mileage)}</p>
-              <p class="inventory-card__location">${escapeHtml(location)}</p>
+              <h3 class="inventory-card__model">${escapeHtml(item.modelDisplay || item.model)}</h3>
+              <p class="inventory-card__price-line"><strong>${escapeHtml(formatListingPrice(item.priceUsd))}</strong> · ${escapeHtml(year)}</p>
+              ${location ? `<p class="inventory-card__location">${escapeHtml(location)}</p>` : ""}
             </div>
           </a>
         </article>
@@ -826,7 +835,140 @@
   prevBtn.addEventListener("click", () => goToPage(currentPage - 1));
   nextBtn.addEventListener("click", () => goToPage(currentPage + 1));
 
+  // Catalog favorites delegation listener
+  grid.addEventListener("click", function (event) {
+    const favBtn = event.target.closest("[data-favorite-toggle]");
+    if (!favBtn) return;
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const vehicleId = favBtn.getAttribute("data-vehicle-id");
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+    const baseUrl = window.EisenBaseUrl || "";
+
+    if (!csrfToken) {
+      console.error("CSRF token not found.");
+      return;
+    }
+
+    favBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append("vehicle_id", vehicleId);
+    formData.append("csrf_token", csrfToken);
+
+    fetch(baseUrl + "/product/favorite/toggle", {
+      method: "POST",
+      body: formData,
+      headers: {
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    })
+    .then(response => {
+      if (response.status === 401) {
+        window.location.href = baseUrl + "/login";
+        return;
+      }
+      if (!response.ok) {
+        throw new Error("HTTP error " + response.status);
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data && data.status === "success") {
+        const allMatchingBtns = document.querySelectorAll(`[data-favorite-toggle][data-vehicle-id="${vehicleId}"]`);
+        allMatchingBtns.forEach(btn => {
+          if (data.action === "added") {
+            btn.classList.add("is-active");
+          } else {
+            btn.classList.remove("is-active");
+          }
+        });
+
+        // Sync local listings state array
+        const listingItem = listings.find(item => String(item.id) === String(vehicleId));
+        if (listingItem) {
+          listingItem.isFavorited = (data.action === "added");
+        }
+
+        if (window.toastr) {
+          if (data.action === "added") {
+            toastr.success("Added to favorites!", "Favorites");
+          } else {
+            toastr.success("Removed from favorites.", "Favorites");
+          }
+        }
+      } else {
+        if (window.toastr && data && data.message) {
+          toastr.error(data.message, "Error");
+        }
+      }
+    })
+    .catch(error => {
+      console.error("Error toggling favorite:", error);
+      if (window.toastr) {
+        toastr.error("An error occurred. Please try again.", "Error");
+      }
+    })
+    .finally(() => {
+      favBtn.disabled = false;
+    });
+  });
+
+  function initializeFiltersFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+
+    // 1. Checkboxes (make, model, fuel, transmission, color)
+    const paramNames = ['make', 'model', 'fuel', 'transmission', 'color'];
+    paramNames.forEach(name => {
+      const val = urlParams.get(name);
+      if (val) {
+        const vals = val.split(',');
+        vals.forEach(v => {
+          const checkbox = checkboxes.find(c => c.name === name && c.value === v.toLowerCase());
+          if (checkbox) checkbox.checked = true;
+        });
+      }
+    });
+
+    // 2. Condition
+    const cond = urlParams.get('condition');
+    if (cond) {
+      conditionInputs.forEach(input => {
+        input.checked = (input.value === cond);
+      });
+    }
+
+    // 3. Price range
+    const priceMin = urlParams.get('price_min');
+    const priceMax = urlParams.get('price_max');
+    if (priceMin && priceMinInput) priceMinInput.value = priceMin;
+    if (priceMax && priceMaxInput) priceMaxInput.value = priceMax;
+    if (priceRangeRoot) updatePriceRangeUi();
+
+    // 4. Year range
+    const yearMin = urlParams.get('year_min');
+    const yearMax = urlParams.get('year_max');
+    if (yearMin && yearMinSelect) yearMinSelect.value = yearMin;
+    if (yearMax && yearMaxSelect) yearMaxSelect.value = yearMax;
+
+    // 5. Engine CC range
+    const ccMin = urlParams.get('engine_cc_min');
+    const ccMax = urlParams.get('engine_cc_max');
+    if (ccMin && engineCcMinSelect) engineCcMinSelect.value = ccMin;
+    if (ccMax && engineCcMaxSelect) engineCcMaxSelect.value = ccMax;
+
+    // 6. Mileage range
+    const milMin = urlParams.get('mileage_min');
+    const milMax = urlParams.get('mileage_max');
+    if (milMin && mileageMinInput) mileageMinInput.value = milMin;
+    if (milMax && mileageMaxInput) mileageMaxInput.value = milMax;
+    if (mileageRangeRoot) updateMileageRangeUi();
+  }
+
   function initListingGrid() {
+    initializeFiltersFromUrl();
     fetchFilteredListings(true);
   }
 

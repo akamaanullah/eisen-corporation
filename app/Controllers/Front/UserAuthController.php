@@ -38,6 +38,14 @@ class UserAuthController extends Controller {
     }
 
     public function login() {
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/login');
+            return;
+        }
+
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
 
@@ -94,6 +102,12 @@ class UserAuthController extends Controller {
     }
 
     public function sendOtp() {
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'CSRF token validation failed.'], 403);
+        }
+
         $email = trim($_POST['email'] ?? '');
 
         if ($email === '') {
@@ -144,6 +158,12 @@ class UserAuthController extends Controller {
     }
 
     public function verifyOtp() {
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'CSRF token validation failed.'], 403);
+        }
+
         $otp = trim($_POST['otp'] ?? '');
         $storedOtp = Session::get('signup_otp');
         $expires = Session::get('signup_otp_expires');
@@ -171,6 +191,14 @@ class UserAuthController extends Controller {
     }
 
     public function completeSignup() {
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/login?tab=signup');
+            return;
+        }
+
         if (Session::get('signup_otp_verified') !== true) {
             Session::setFlash('error', 'Please verify your email address first.');
             $this->redirect('/login?tab=signup');
@@ -189,6 +217,33 @@ class UserAuthController extends Controller {
 
         if ($email === '' || $name === '' || $country === '' || $accountType === '' || $phone === '' || $password === '' || !$asfConfirmed) {
             Session::setFlash('error', 'Please fill in all required fields and accept the terms.');
+            $this->redirect('/login?tab=signup');
+            return;
+        }
+
+        // Validate lengths and formats
+        if (mb_strlen($name) > 100) {
+            Session::setFlash('error', 'Full name must not exceed 100 characters.');
+            $this->redirect('/login?tab=signup');
+            return;
+        }
+        if (mb_strlen($country) > 50) {
+            Session::setFlash('error', 'Country name must not exceed 50 characters.');
+            $this->redirect('/login?tab=signup');
+            return;
+        }
+        if (mb_strlen($phone) > 25 || mb_strlen($whatsapp) > 25) {
+            Session::setFlash('error', 'Phone and WhatsApp numbers must not exceed 25 characters.');
+            $this->redirect('/login?tab=signup');
+            return;
+        }
+        if (!preg_match('/^[0-9+\-\s()]+$/', $phone) || ($whatsapp !== '' && !preg_match('/^[0-9+\-\s()]+$/', $whatsapp))) {
+            Session::setFlash('error', 'Phone or WhatsApp contains invalid characters. Only digits, spaces, -, +, and parentheses are allowed.');
+            $this->redirect('/login?tab=signup');
+            return;
+        }
+        if (strlen($password) < 8) {
+            Session::setFlash('error', 'Password must be at least 8 characters long.');
             $this->redirect('/login?tab=signup');
             return;
         }
@@ -314,10 +369,13 @@ class UserAuthController extends Controller {
             }
 
             // Request User Info profile details using the Access Token
-            $userInfoUrl = 'https://www.googleapis.com/oauth2/v3/userinfo?access_token=' . urlencode($tokenData['access_token']);
+            $userInfoUrl = 'https://www.googleapis.com/oauth2/v3/userinfo';
             $ch = curl_init($userInfoUrl);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer ' . $tokenData['access_token'],
+            ]);
             $userInfoResponse = curl_exec($ch);
             curl_close($ch);
 
@@ -419,14 +477,14 @@ class UserAuthController extends Controller {
             $user = $stmt->fetch();
 
             if (!$user) {
-                Session::setFlash('error', 'No account exists with this email address.');
+                Session::setFlash('success', 'If an account exists with that email, a reset link has been sent.');
                 $this->redirect('/forgot-password');
                 return;
             }
 
             // Only proceed if user is a registered buyer (not admin/staff)
             if ($user['role'] !== 'registered_buyer') {
-                Session::setFlash('error', 'Control Room staff must reset their password via the Admin Control Room.');
+                Session::setFlash('success', 'If an account exists with that email, a reset link has been sent.');
                 $this->redirect('/forgot-password');
                 return;
             }

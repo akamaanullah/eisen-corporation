@@ -3,6 +3,7 @@ namespace App\Controllers\Front;
 
 use App\Core\Controller;
 use App\Core\Session;
+use App\Core\Database;
 use App\Models\User;
 use App\Models\Consignee;
 use App\Models\Vehicle;
@@ -571,5 +572,47 @@ class AccountController extends Controller
         Vehicle::removeFavorite($userId, $vehicle['id']);
 
         return $this->jsonResponse(['status' => 'success', 'message' => 'Favorite removed successfully.']);
+    }
+
+    public function toggleFavorite()
+    {
+        if (!Session::isLoggedIn()) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Unauthorized'], 401);
+        }
+
+        $userId = Session::get('user_id');
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'CSRF verification failed.'], 403);
+        }
+
+        $vehicleId = (int)($_POST['vehicle_id'] ?? 0);
+        if ($vehicleId <= 0) {
+            return $this->jsonResponse(['status' => 'error', 'message' => 'Invalid Vehicle ID.'], 400);
+        }
+
+        // Check if already favorited
+        $isFavorited = Vehicle::isFavorited($userId, $vehicleId);
+
+        if ($isFavorited) {
+            Vehicle::removeFavorite($userId, $vehicleId);
+            $action = 'removed';
+        } else {
+            Vehicle::addFavorite($userId, $vehicleId);
+            $action = 'added';
+        }
+
+        // Count new total favorites for the vehicle
+        $db = Database::getConnection();
+        $stmt = $db->prepare("SELECT COUNT(*) FROM vehicle_favorites WHERE vehicle_id = ?");
+        $stmt->execute([$vehicleId]);
+        $count = (int)$stmt->fetchColumn();
+
+        return $this->jsonResponse([
+            'status' => 'success',
+            'action' => $action,
+            'count' => $count
+        ]);
     }
 }

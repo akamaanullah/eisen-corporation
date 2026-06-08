@@ -1,5 +1,6 @@
 <?php
 $v = $vehicle;
+$loadProductScript = true;
 $galleryTotal = count($gallery);
 $galleryFirst = $gallery[0];
 $firstSrc = $galleryFirst['src'];
@@ -20,10 +21,10 @@ include __DIR__ . '/partials/header.php';
   window.EisenVehicleData = {
     year: <?= json_encode($v['year']) ?>,
     make: <?= json_encode($vehicleDetails[0]['value'] ?? '') ?>,
-    model: <?= json_encode($vehicleDetails[1]['value'] ?? '') ?>,
+    model: <?= json_encode($v['modelDisplay'] ?? $v['model']) ?>,
     title: <?= json_encode($v['title']) ?>,
     bodyType: <?= json_encode($v['bodyType']) ?>,
-    location: <?= json_encode($v['location']) ?>,
+    location: <?= json_encode($v['locationDisplay'] ?? $v['location']) ?>,
     mileageKm: <?= (int)$v['mileageKm'] ?>,
     engineCc: <?= (int)$v['engineCc'] ?>,
     fuel: <?= json_encode($v['fuel']) ?>,
@@ -36,13 +37,14 @@ include __DIR__ . '/partials/header.php';
   };
 
   window.EisenPricingData = {
-    vehicle: <?= (int)($pricingBreakdown[0]['jpy'] ?? 0) ?>,
-    freight: <?= (int)($pricingBreakdown[1]['jpy'] ?? 0) ?>,
-    vanning: <?= (int)($pricingBreakdown[2]['jpy'] ?? 0) ?>,
-    inspection: <?= (int)($pricingBreakdown[3]['jpy'] ?? 0) ?>,
-    insurance: <?= (int)($pricingBreakdown[4]['jpy'] ?? 0) ?>,
-    coupon: <?= (int)($pricingBreakdown[5]['jpy'] ?? 0) ?>,
+    vehicle:    <?= (float)($pricingBreakdown[0]['usd'] ?? 0) ?>,
+    freight:    <?= (float)($pricingBreakdown[1]['usd'] ?? 0) ?>,
+    vanning:    <?= (float)($pricingBreakdown[2]['usd'] ?? 0) ?>,
+    inspection: <?= (float)($pricingBreakdown[3]['usd'] ?? 0) ?>,
+    insurance:  <?= (float)($pricingBreakdown[4]['usd'] ?? 0) ?>,
+    coupon:     <?= (float)($pricingBreakdown[5]['usd'] ?? 0) ?>,
   };
+  window.EisenCountryToPorts = <?= json_encode($estimate['countryToPorts'] ?? []) ?>;
 </script>
 
   <main id="main" class="product-page">
@@ -139,7 +141,7 @@ include __DIR__ . '/partials/header.php';
               <span><span data-i18n="product.stockId">Stock Id</span>: <strong><?= htmlspecialchars($v['stockId']) ?></strong></span>
               <span class="product-buybox__location">
                 <span data-i18n="product.inventoryLocation">Inventory location</span>:
-                <strong><?= htmlspecialchars($v['location']) ?></strong>
+                <strong <?php if (($v['locationDisplay'] ?? '') === 'N/A'): ?>data-i18n="spec.val.na"<?php endif; ?>><?= htmlspecialchars($v['locationDisplay'] ?? $v['location']) ?></strong>
               </span>
             </div>
 
@@ -154,7 +156,6 @@ include __DIR__ . '/partials/header.php';
               <span class="product-buybox__stars" aria-label="<?= htmlspecialchars($v['rating']) ?> out of 5 stars"><?= htmlspecialchars($v['stars']) ?></span>
               <span><strong><?= (int) $v['reviews'] ?></strong> <span data-i18n="product.reviews">Reviews</span></span>
               <span class="product-buybox__stat"><?= (int) $v['views'] ?> <span data-i18n="product.views">views</span></span>
-              <span class="product-buybox__stat">♥ <?= (int) $v['favorites'] ?></span>
             </div>
 
             <div class="product-buybox__pricing">
@@ -162,43 +163,43 @@ include __DIR__ . '/partials/header.php';
               <p class="product-buybox__ask" data-i18n="product.ask">Ask</p>
               <?php endif; ?>
               <p class="product-buybox__price-row">
-                <span class="product-buybox__price-label" data-i18n="product.vehiclePrice">Vehicle Price</span>
-                <strong class="product-buybox__price product-vehicle-price" data-price-jpy="<?= (int) $v['priceJpy'] ?>">¥<?= number_format((int) $v['priceJpy']) ?></strong>
+                 <span class="product-buybox__price-label" data-i18n="product.vehiclePrice">Vehicle Price</span>
+                <strong class="product-buybox__price product-vehicle-price" data-price-usd="<?= (float)$v['priceUsd'] ?>" data-price-jpy="<?= (int) $v['priceJpy'] ?>">¥<?= number_format((int) $v['priceJpy']) ?></strong>
               </p>
             </div>
 
             <ul class="product-quick-specs">
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.mileage">Mileage</span>
-                <strong><?= number_format((int) $v['mileageKm']) ?>km</strong>
+                <strong <?php if ($v['mileageDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php endif; ?>><?= htmlspecialchars($v['mileageDisplay']) ?></strong>
               </li>
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.engine">Engine</span>
-                <strong><?= number_format((int) $v['engineCc']) ?>cc</strong>
+                <strong <?php if ($v['engineDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php endif; ?>><?= htmlspecialchars($v['engineDisplay']) ?></strong>
               </li>
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.transmission">Transmission</span>
-                <strong data-i18n="spec.val.<?= strtolower(str_replace([' ', '(', ')'], ['_', '', ''], $v['transmission'])) ?>"><?= htmlspecialchars($v['transmission']) ?></strong>
+                <strong <?php if ($v['transmissionDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php else: ?>data-i18n="spec.val.<?= strtolower(str_replace([' ', '(', ')'], ['_', '', ''], $v['transmission'])) ?>"<?php endif; ?>><?= htmlspecialchars($v['transmissionDisplay']) ?></strong>
               </li>
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.drive">Drive</span>
-                <strong data-i18n="spec.val.<?= strtolower($v['drive']) ?>"><?= htmlspecialchars($v['drive']) ?></strong>
+                <strong <?php if ($v['driveDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php else: ?>data-i18n="spec.val.<?= strtolower($v['drive']) ?>"<?php endif; ?>><?= htmlspecialchars($v['driveDisplay']) ?></strong>
               </li>
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.steering">Steering</span>
-                <strong data-i18n="spec.val.<?= strtolower(str_replace([' ', '(', ')'], ['_', '', ''], $v['steering'])) ?>"><?= htmlspecialchars($v['steering']) ?></strong>
+                <strong <?php if ($v['steeringDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php else: ?>data-i18n="spec.val.<?= strtolower(str_replace([' ', '(', ')'], ['_', '', ''], $v['steering'])) ?>"<?php endif; ?>><?= htmlspecialchars($v['steeringDisplay']) ?></strong>
               </li>
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.fuel">Fuel</span>
-                <strong data-i18n="spec.val.<?= strtolower($v['fuel']) ?>"><?= htmlspecialchars($v['fuel']) ?></strong>
+                <strong <?php if ($v['fuelDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php else: ?>data-i18n="spec.val.<?= strtolower($v['fuel']) ?>"<?php endif; ?>><?= htmlspecialchars($v['fuelDisplay']) ?></strong>
               </li>
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.doors">Door</span>
-                <strong><?= (int) $v['doors'] ?></strong>
+                <strong <?php if ($v['doorsDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php endif; ?>><?= htmlspecialchars($v['doorsDisplay']) ?></strong>
               </li>
               <li>
                 <span class="product-quick-specs__label" data-i18n="product.spec.seats">Seats</span>
-                <strong><?= (int) $v['seats'] ?></strong>
+                <strong <?php if ($v['seatsDisplay'] === 'N/A'): ?>data-i18n="spec.val.na"<?php endif; ?>><?= htmlspecialchars($v['seatsDisplay']) ?></strong>
               </li>
             </ul>
 
@@ -218,8 +219,8 @@ include __DIR__ . '/partials/header.php';
                 </select>
               </label>
               <p class="product-calculator__row">
-                <span data-i18n="product.vehiclePrice">Vehicle Price</span>
-                <strong class="product-vehicle-price product-calculator__amount" data-price-jpy="<?= (int) $v['priceJpy'] ?>">¥<?= number_format((int) $v['priceJpy']) ?></strong>
+                 <span data-i18n="product.vehiclePrice">Vehicle Price</span>
+                <strong class="product-vehicle-price product-calculator__amount" data-price-usd="<?= (float)$v['priceUsd'] ?>" data-price-jpy="<?= (int) $v['priceJpy'] ?>">¥<?= number_format((int) $v['priceJpy']) ?></strong>
               </p>
               <a class="btn btn--primary btn--block product-calculator__whatsapp" href="https://wa.me/" target="_blank" rel="noopener noreferrer">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.435 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
@@ -238,7 +239,9 @@ include __DIR__ . '/partials/header.php';
                   <?php foreach ($vehicleDetails as $row):
                     $lblKey = "spec.label." . strtolower(str_replace([' ', '&', '/'], '_', $row['label']));
                     $valKey = "";
-                    if (!is_numeric($row['value']) && strpos($row['value'], '.') === false && !preg_match('/^[0-9]+[a-zA-Z\s]+$/', $row['value'])) {
+                    if ($row['value'] === 'N/A') {
+                        $valKey = 'spec.val.na';
+                    } elseif (!is_numeric($row['value']) && strpos($row['value'], '.') === false && !preg_match('/^[0-9]+[a-zA-Z\s]+$/', $row['value'])) {
                         if (!str_ends_with(strtolower($row['value']), 'cc') && !str_ends_with(strtolower($row['value']), 'km')) {
                             $valKey = "spec.val." . strtolower(str_replace([' ', '(', ')', '&', '/'], ['_', '', '', '_', '_'], trim($row['value'])));
                         }
@@ -258,7 +261,9 @@ include __DIR__ . '/partials/header.php';
                   <?php foreach ($specifications as $row):
                     $lblKey = "spec.label." . strtolower(str_replace([' ', '&', '/'], '_', $row['label']));
                     $valKey = "";
-                    if (!is_numeric($row['value']) && strpos($row['value'], '.') === false && !preg_match('/^[0-9]+[a-zA-Z\s]+$/', $row['value'])) {
+                    if ($row['value'] === 'N/A') {
+                        $valKey = 'spec.val.na';
+                    } elseif (!is_numeric($row['value']) && strpos($row['value'], '.') === false && !preg_match('/^[0-9]+[a-zA-Z\s]+$/', $row['value'])) {
                         if (!str_ends_with(strtolower($row['value']), 'cc') && !str_ends_with(strtolower($row['value']), 'km')) {
                             $valKey = "spec.val." . strtolower(str_replace([' ', '(', ')', '&', '/'], ['_', '', '', '_', '_'], trim($row['value'])));
                         }
@@ -273,9 +278,11 @@ include __DIR__ . '/partials/header.php';
               </section>
             </div>
 
+            <?php if (!empty($optionGroups)): ?>
             <section class="product-section product-section--plain" aria-labelledby="product-car-options">
               <h2 id="product-car-options" class="product-section__title" data-i18n="product.carOptions">Car Options</h2>
               <?php foreach ($optionGroups as $group): ?>
+              <?php if (empty($group['items'])) continue; ?>
               <div class="product-options-group">
                 <h3 class="product-options-group__title" <?php if (!empty($group['i18n'])): ?>data-i18n="<?= htmlspecialchars($group['i18n']) ?>"<?php endif; ?>><?= htmlspecialchars($group['title']) ?></h3>
                 <ul class="product-options-tags">
@@ -283,17 +290,39 @@ include __DIR__ . '/partials/header.php';
                     $optKey = "option." . strtolower(str_replace([' ', '&', '/'], '_', $item['label']));
                   ?>
                   <li>
-                    <span class="product-options-tag<?= !empty($item['active']) ? ' is-active' : '' ?>">
+                    <span class="product-options-tag is-active">
                       <span class="product-options-tag__label" data-i18n="<?= $optKey ?>"><?= htmlspecialchars($item['label']) ?></span>
-                      <?php if (!empty($item['active'])): ?>
                       <span class="product-options-tag__check" aria-hidden="true">✓</span>
-                      <?php endif; ?>
                     </span>
                   </li>
                   <?php endforeach; ?>
                 </ul>
               </div>
               <?php endforeach; ?>
+            </section>
+            <?php endif; ?>
+
+            <section class="product-section card" style="margin-top: 2rem;" aria-labelledby="product-guarantee-title">
+              <h2 id="product-guarantee-title" class="product-section__title" data-i18n="product.guarantee.title">Eisen Certified Quality Guarantee</h2>
+              <div style="display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 250px;">
+                  <p style="font-weight: bold; margin-bottom: 0.5rem;" data-i18n="product.guarantee.subtitle">100% Inspected & Approved Stock</p>
+                  <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;" data-i18n="product.guarantee.desc">
+                    Every vehicle sourced by Eisen Corporation undergoes a rigorous 150-point physical inspection at our Kobe yard. We verify the chassis number, odometer authenticity, engine performance, transmission smoothness, and authenticate the USS auction sheet before booking ocean shipment.
+                  </p>
+                </div>
+                <div style="background: rgba(var(--primary-rgb), 0.05); padding: 1.5rem; border-radius: 8px; border: 1px solid rgba(var(--primary-rgb), 0.1); width: 100%; max-width: 320px;">
+                  <h4 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="color: var(--primary); font-size: 1.2rem;">🛡️</span>
+                    <span data-i18n="product.guarantee.cardTitle">Certified Grade</span>
+                  </h4>
+                  <ul style="list-style: none; padding: 0; font-size: 0.9rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <li>✓ <strong data-i18n="product.guarantee.item1">Chassis Verified</strong></li>
+                    <li>✓ <strong data-i18n="product.guarantee.item2">Odometer Authenticated</strong></li>
+                    <li>✓ <strong data-i18n="product.guarantee.item3">Export Compliance Passed</strong></li>
+                  </ul>
+                </div>
+              </div>
             </section>
           </div>
 
@@ -369,7 +398,7 @@ include __DIR__ . '/partials/header.php';
                       <?php if (!empty($row['mode']) && $row['mode'] === 'ask'): ?>
                       <span class="product-estimate__value-ask" data-i18n="product.ask">ASK</span>
                       <?php else: ?>
-                      <span class="product-estimate__value-jpy" data-estimate-price-jpy="<?= (int) ($row['jpy'] ?? 0) ?>">¥<?= number_format((int) ($row['jpy'] ?? 0)) ?></span>
+                      <span class="product-estimate__value-jpy" data-estimate-price-usd="<?= (float) ($row['usd'] ?? 0) ?>"><?= number_format((float) ($row['usd'] ?? 0), 2) ?></span>
                       <?php endif; ?>
                     </dd>
                   </div>
@@ -409,8 +438,8 @@ include __DIR__ . '/partials/header.php';
                     </div>
                     <div class="product-rec-card__body">
                       <h3 class="product-rec-card__name"><?= htmlspecialchars($rec['title']) ?></h3>
-                      <p class="product-rec-card__meta">
-                        <span class="product-vehicle-price" data-price-jpy="<?= (int)$rec['priceJpy'] ?>">¥<?= number_format((int)$rec['priceJpy']) ?></span> · <?= number_format((int)($rec['mileageKm'] / 1000)) ?>K km
+                       <p class="product-rec-card__meta">
+                        <span class="product-vehicle-price" data-price-usd="<?= (float)$rec['priceUsd'] ?>" data-price-jpy="<?= (int)$rec['priceJpy'] ?>">¥<?= number_format((int)$rec['priceJpy']) ?></span> · <?= number_format((int)($rec['mileageKm'] / 1000)) ?>K km
                       </p>
                       <p class="product-rec-card__location"><?= htmlspecialchars($rec['location']) ?></p>
                     </div>
@@ -440,5 +469,4 @@ include __DIR__ . '/partials/header.php';
     </div>
   </div>
 
-  <script src="<?= BASE_URL ?>/public/js/product.js" defer></script>
 <?php include __DIR__ . '/partials/footer.php'; ?>

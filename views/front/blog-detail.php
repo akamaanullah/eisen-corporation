@@ -1,7 +1,8 @@
 <?php
-$imgBase = 'https://images.unsplash.com/';
+use App\Helpers\ImageUrl;
+
 $postUrl = BASE_URL . '/blog/' . $post['slug'];
-$heroImg = $imgBase . $post['image'] . '?w=1200&q=80';
+$heroImg = ImageUrl::resolve($post['image'], 1200);
 ?>
 <?php include __DIR__ . '/partials/header.php'; ?>
 
@@ -23,7 +24,7 @@ $heroImg = $imgBase . $post['image'] . '?w=1200&q=80';
           <nav class="blog-detail-breadcrumb" aria-label="Breadcrumb">
             <ol class="blog-detail-breadcrumb__list">
               <li><a href="<?= BASE_URL ?>/" data-i18n="nav.home">Home</a></li>
-              <li><a href="<?= BASE_URL ?>/blog" data-i18n="nav.blog">Blog</a></li>
+              <li><a href="<?= BASE_URL ?>/blogs" data-i18n="nav.blog">Blog</a></li>
               <li aria-current="page"><?= htmlspecialchars($post['title']) ?></li>
             </ol>
           </nav>
@@ -47,7 +48,9 @@ $heroImg = $imgBase . $post['image'] . '?w=1200&q=80';
           <article class="blog-detail-article">
             <div class="blog-detail-article__content">
               <?php foreach ($post['body'] as $block): ?>
-                <?php if ($block['type'] === 'p'): ?>
+                <?php if ($block['type'] === 'raw_html'): ?>
+                  <?= $block['html'] ?>
+                <?php elseif ($block['type'] === 'p'): ?>
                   <p><?= htmlspecialchars($block['text']) ?></p>
                 <?php elseif ($block['type'] === 'h2'): ?>
                   <h2><?= htmlspecialchars($block['text']) ?></h2>
@@ -67,7 +70,7 @@ $heroImg = $imgBase . $post['image'] . '?w=1200&q=80';
             </div>
 
             <footer class="blog-detail-article__footer">
-              <a class="section-link" href="<?= BASE_URL ?>/blog" data-i18n="blogDetail.back">Back to all articles</a>
+              <a class="section-link" href="<?= BASE_URL ?>/blogs" data-i18n="blogDetail.back">Back to all articles</a>
               <a class="btn btn--primary" href="<?= BASE_URL ?>/listing" data-i18n="blogPage.browseInventory">Browse vehicle inventory</a>
             </footer>
           </article>
@@ -92,7 +95,7 @@ $heroImg = $imgBase . $post['image'] . '?w=1200&q=80';
                   <a class="blog-detail-related__link" href="<?= BASE_URL ?>/blog/<?= htmlspecialchars($rel['slug']) ?>">
                     <div class="blog-detail-related__media">
                       <img
-                        src="<?= htmlspecialchars($imgBase . $rel['image'] . '?w=400&q=80') ?>"
+                        src="<?= htmlspecialchars(ImageUrl::resolve($rel['image'], 400)) ?>"
                         alt=""
                         width="400"
                         height="240"
@@ -120,7 +123,7 @@ $heroImg = $imgBase . $post['image'] . '?w=1200&q=80';
       <div class="container">
         <header class="section-header">
           <h2 id="blog-detail-recs-title" class="section-title" data-i18n="blogDetail.moreArticles">More from the blog</h2>
-          <a class="section-link" href="<?= BASE_URL ?>/blog" data-i18n="blog.viewAll">View all blog</a>
+          <a class="section-link" href="<?= BASE_URL ?>/blogs" data-i18n="blog.viewAll">View all blog</a>
         </header>
         <div class="blog-cards blog-cards--page">
           <?php foreach ($related as $rel): ?>
@@ -128,7 +131,7 @@ $heroImg = $imgBase . $post['image'] . '?w=1200&q=80';
             <a href="<?= BASE_URL ?>/blog/<?= htmlspecialchars($rel['slug']) ?>" class="blog-card__link">
               <div class="blog-card__media">
                 <img
-                  src="<?= htmlspecialchars($imgBase . $rel['image'] . '?w=600&q=80') ?>"
+                  src="<?= htmlspecialchars(ImageUrl::resolve($rel['image'], 600)) ?>"
                   alt=""
                   width="600"
                   height="360"

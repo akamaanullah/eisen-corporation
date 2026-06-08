@@ -233,6 +233,7 @@ $googleName = $googleName ?? '';
           <?= $activeTab !== 'login' ? 'hidden' : '' ?>
         >
           <form class="login-form" action="<?= BASE_URL ?>/login" method="POST" novalidate>
+            <?= $this->csrf_field() ?>
             <div class="form-field">
               <label class="form-label" for="login-email">Email</label>
               <input
@@ -339,6 +340,7 @@ $googleName = $googleName ?? '';
             </div>
 
             <form action="<?= BASE_URL ?>/signup/complete" method="POST" novalidate id="form-complete-signup">
+              <?= $this->csrf_field() ?>
               <div class="form-field">
                 <label class="form-label" for="reg-email">Email</label>
                 <input
@@ -546,6 +548,21 @@ $googleName = $googleName ?? '';
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+
+  function otpFetchBody(params) {
+    const body = new URLSearchParams(params);
+    body.set("csrf_token", csrfToken);
+    return body.toString();
+  }
+
+  function otpFetchHeaders() {
+    return {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "X-CSRF-TOKEN": csrfToken
+    };
+  }
+
   const formSendOtp = document.getElementById("form-send-otp");
   const formVerifyOtp = document.getElementById("form-verify-otp");
   const formCompleteSignup = document.getElementById("form-complete-signup");
@@ -602,10 +619,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
       fetch("<?= BASE_URL ?>/signup/send-otp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: "email=" + encodeURIComponent(emailVal)
+        headers: otpFetchHeaders(),
+        body: otpFetchBody({ email: emailVal })
       })
       .then(res => res.json())
       .then(data => {
@@ -649,10 +664,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
       fetch("<?= BASE_URL ?>/signup/verify-otp", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded"
-        },
-        body: "otp=" + encodeURIComponent(otpVal)
+        headers: otpFetchHeaders(),
+        body: otpFetchBody({ otp: otpVal })
       })
       .then(res => res.json())
       .then(data => {
@@ -685,10 +698,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         fetch("<?= BASE_URL ?>/signup/send-otp", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: "email=" + encodeURIComponent(emailVal)
+          headers: otpFetchHeaders(),
+          body: otpFetchBody({ email: emailVal })
         })
         .then(res => res.json())
         .then(data => {

@@ -1,112 +1,55 @@
 <?php
 include __DIR__ . '/partials/header.php';
 
-$inventoryMakes = [
-    ['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.make.others'],
-    ['value' => 'audi', 'label' => 'Audi'],
-    ['value' => 'bmw', 'label' => 'BMW'],
-    ['value' => 'daihatsu', 'label' => 'Daihatsu'],
-    ['value' => 'ford', 'label' => 'Ford'],
-    ['value' => 'hino', 'label' => 'Hino'],
-    ['value' => 'honda', 'label' => 'Honda'],
-    ['value' => 'isuzu', 'label' => 'Isuzu'],
-    ['value' => 'lexus', 'label' => 'Lexus'],
-    ['value' => 'mazda', 'label' => 'Mazda'],
-    ['value' => 'mercedes', 'label' => 'Mercedes'],
-    ['value' => 'mitsubishi', 'label' => 'Mitsubishi'],
-    ['value' => 'nissan', 'label' => 'Nissan'],
-    ['value' => 'porsche', 'label' => 'Porsche'],
-    ['value' => 'subaru', 'label' => 'Subaru'],
-    ['value' => 'suzuki', 'label' => 'Suzuki'],
-    ['value' => 'toyota', 'label' => 'Toyota'],
-    ['value' => 'volkswagen', 'label' => 'Volkswagen'],
-    ['value' => 'volvo', 'label' => 'Volvo'],
-];
+$inventoryMakes = [['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.make.others']];
+if (!empty($makes)) {
+    foreach ($makes as $m) {
+        $inventoryMakes[] = [
+            'value' => strtolower($m),
+            'label' => $m,
+            'i18n' => 'spec.val.' . strtolower($m)
+        ];
+    }
+}
 
-$inventoryModels = [
-    ['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.model.others'],
-    ['value' => 'prius', 'label' => 'Prius'],
-    ['value' => 'aqua', 'label' => 'Aqua'],
-    ['value' => 'corolla', 'label' => 'Corolla'],
-    ['value' => 'camry', 'label' => 'Camry'],
-    ['value' => 'highlander', 'label' => 'Highlander'],
-    ['value' => 'rav4', 'label' => 'RAV4'],
-    ['value' => 'land-cruiser', 'label' => 'Land Cruiser'],
-    ['value' => 'alphard', 'label' => 'Alphard'],
-    ['value' => 'hiace', 'label' => 'Hiace'],
-    ['value' => 'fit', 'label' => 'Fit'],
-    ['value' => 'civic', 'label' => 'Civic'],
-    ['value' => 'cr-v', 'label' => 'CR-V'],
-    ['value' => 'accord', 'label' => 'Accord'],
-    ['value' => 'vezel', 'label' => 'Vezel'],
-    ['value' => 'note', 'label' => 'Note'],
-    ['value' => 'leaf', 'label' => 'Leaf'],
-    ['value' => 'x-trail', 'label' => 'X-Trail'],
-    ['value' => 'skyline', 'label' => 'Skyline'],
-    ['value' => 'cx-5', 'label' => 'CX-5'],
-    ['value' => 'demio', 'label' => 'Demio'],
-    ['value' => 'forester', 'label' => 'Forester'],
-    ['value' => 'impreza', 'label' => 'Impreza'],
-    ['value' => 'swift', 'label' => 'Swift'],
-    ['value' => 'jimny', 'label' => 'Jimny'],
-    ['value' => 'x5', 'label' => 'X5'],
-    ['value' => '3-series', 'label' => '3 Series'],
-    ['value' => 'c-class', 'label' => 'C-Class'],
-    ['value' => 'e-class', 'label' => 'E-Class'],
-    ['value' => 'q5', 'label' => 'Q5'],
-    ['value' => 'a4', 'label' => 'A4'],
-];
+$inventoryModels = [['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.model.others']];
+if (!empty($models)) {
+    foreach ($models as $m) {
+        $inventoryModels[] = [
+            'value' => strtolower(str_replace(' ', '-', $m)),
+            'label' => $m,
+            'i18n' => 'spec.val.' . strtolower(str_replace(' ', '-', $m))
+        ];
+    }
+}
 
 $inventoryYearMax = (int) date('Y');
 $inventoryYearMin = $inventoryYearMax - 30;
 $inventoryYears = range($inventoryYearMax, $inventoryYearMin);
 
-$inventoryFuelTypes = [
-    ['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.fuel.others'],
-    ['value' => 'electric', 'label' => 'Electric', 'i18n' => 'inventory.fuel.electric'],
-    ['value' => 'hybrid', 'label' => 'Hybrid', 'i18n' => 'inventory.fuel.hybrid'],
-    ['value' => 'lpg-petrol', 'label' => 'LPG + Petrol', 'i18n' => 'inventory.fuel.lpgPetrol'],
-    ['value' => 'petrol', 'label' => 'Petrol', 'i18n' => 'inventory.fuel.petrol'],
-];
+$inventoryFuelTypes = [['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.fuel.others']];
+if (!empty($fuels)) {
+    foreach ($fuels as $f) {
+        $val = strtolower(str_replace(' ', '-', $f));
+        $inventoryFuelTypes[] = [
+            'value' => $val,
+            'label' => ucwords(strtolower($f)),
+            'i18n' => 'inventory.fuel.' . ($val === 'lpg-petrol' ? 'lpgPetrol' : $val)
+        ];
+    }
+}
 
-$inventoryColors = [
-    ['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.color.others'],
-    ['value' => 'beige', 'label' => 'Beige'],
-    ['value' => 'black', 'label' => 'Black'],
-    ['value' => 'blue', 'label' => 'Blue'],
-    ['value' => 'blue-metallic', 'label' => 'Blue Metallic'],
-    ['value' => 'bronze', 'label' => 'Bronze'],
-    ['value' => 'brown', 'label' => 'Brown'],
-    ['value' => 'ceramic', 'label' => 'Ceramic'],
-    ['value' => 'con', 'label' => 'Con'],
-    ['value' => 'cream', 'label' => 'Cream'],
-    ['value' => 'dark-blue', 'label' => 'Dark Blue'],
-    ['value' => 'gold', 'label' => 'Gold'],
-    ['value' => 'green', 'label' => 'Green'],
-    ['value' => 'grey', 'label' => 'Grey'],
-    ['value' => 'grey-metallic', 'label' => 'Grey Metallic'],
-    ['value' => 'gun-metal', 'label' => 'Gun Metal'],
-    ['value' => 'khaki', 'label' => 'Khaki'],
-    ['value' => 'light-blue', 'label' => 'Light Blue'],
-    ['value' => 'maroon', 'label' => 'Maroon'],
-    ['value' => 'navy-blue', 'label' => 'Navy Blue'],
-    ['value' => 'orange', 'label' => 'Orange'],
-    ['value' => 'pearl', 'label' => 'Pearl'],
-    ['value' => 'pearl-white', 'label' => 'Pearl White'],
-    ['value' => 'pink', 'label' => 'Pink'],
-    ['value' => 'purple', 'label' => 'Purple'],
-    ['value' => 'red', 'label' => 'Red'],
-    ['value' => 'red-two-tone', 'label' => 'Red Two Tone'],
-    ['value' => 'silver', 'label' => 'Silver'],
-    ['value' => 'silver-two-tone', 'label' => 'Silver Two Tone'],
-    ['value' => 'tea', 'label' => 'Tea'],
-    ['value' => 'titanium', 'label' => 'Titanium'],
-    ['value' => 'two-tone', 'label' => 'Two-tone'],
-    ['value' => 'white', 'label' => 'White'],
-    ['value' => 'white-two-tone', 'label' => 'White Two Tone'],
-    ['value' => 'wine', 'label' => 'Wine'],
-    ['value' => 'yellow', 'label' => 'Yellow'],
-];
+$inventoryColors = [['value' => 'others', 'label' => 'Others', 'i18n' => 'inventory.color.others']];
+if (!empty($colors)) {
+    foreach ($colors as $c) {
+        $val = strtolower(str_replace(' ', '-', $c));
+        $inventoryColors[] = [
+            'value' => $val,
+            'label' => ucwords(strtolower($c)),
+            'i18n' => 'inventory.color.' . $val
+        ];
+    }
+}
 
 $inventoryEngineCc = [660, 800, 1000, 1200, 1300, 1500, 1600, 1800, 2000, 2200, 2500, 3000, 3500, 4000, 4500, 5000, 6000];
 ?>

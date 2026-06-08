@@ -103,6 +103,20 @@ include dirname(__DIR__) . '/admin/partials/header.php';
         background: rgba(201, 162, 39, 0.08);
         transform: scale(1.02);
     }
+    .photo-slot.dragging {
+        opacity: 0.65;
+        border-color: var(--color-gold-600);
+    }
+    .photo-slot[draggable="true"] {
+        cursor: grab;
+    }
+    .photo-slot[draggable="true"]:active {
+        cursor: grabbing;
+    }
+    .upload-dropzone.is-dragover {
+        border-color: var(--color-gold-500);
+        background: rgba(201, 162, 39, 0.06);
+    }
     .slot-number {
         font-size: 9px;
         font-weight: 700;
@@ -173,7 +187,6 @@ include dirname(__DIR__) . '/admin/partials/header.php';
 
     <form id="addVehicleDetailedForm" action="<?= BASE_URL ?>/admin/inventory/edit/<?= $car['id'] ?>" method="POST" enctype="multipart/form-data">
         <?= $this->csrf_field() ?>
-        <input type="hidden" name="exchange_rate" id="exchange_rate_input" value="150">
 
         <div class="form-grid-2x">
             
@@ -188,17 +201,10 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                     </h3>
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                        <div class="form-group">
-                            <label class="form-label" for="make">Make / Manufacturer *</label>
-                            <input class="form-control" type="text" id="make" name="make" value="<?= htmlspecialchars($car['make']) ?>" placeholder="e.g. Honda" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="model">Model *</label>
-                            <input class="form-control" type="text" id="model" name="model" value="<?= htmlspecialchars($car['model']) ?>" placeholder="e.g. Fit 13G F" required>
-                        </div>
+                        <?php include __DIR__ . '/partials/inventory-make-model.php'; ?>
                         <div class="form-group">
                             <label class="form-label" for="year">Model Year *</label>
-                            <input class="form-control" type="number" id="year" name="year" value="<?= htmlspecialchars($car['year']) ?>" placeholder="e.g. 2018" required>
+                            <input class="form-control" type="number" id="year" name="year" min="1980" max="<?= (int) date('Y') + 1 ?>" value="<?= htmlspecialchars($car['year']) ?>" placeholder="e.g. 2018" required>
                         </div>
                     </div>
 
@@ -208,44 +214,48 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                             <input class="form-control" type="text" id="chassis" name="chassis" value="<?= htmlspecialchars($car['chassis_number']) ?>" placeholder="e.g. DBA-GK3" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="grade">Inspection Grade *</label>
-                            <input class="form-control" type="text" id="grade" name="grade" value="<?= htmlspecialchars($car['grade']) ?>" placeholder="e.g. 4.5" required>
+                            <label class="form-label" for="grade">Inspection Grade</label>
+                            <input class="form-control" type="text" id="grade" name="grade" value="<?= htmlspecialchars($car['grade']) ?>" placeholder="e.g. 4.5">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="mileage">Mileage (KM) *</label>
-                            <input class="form-control" type="number" id="mileage" name="mileage" value="<?= htmlspecialchars($car['mileage_km']) ?>" placeholder="e.g. 76000" required>
+                            <label class="form-label" for="car_grade">Car Grade</label>
+                            <input class="form-control" type="text" id="car_grade" name="car_grade" value="<?= htmlspecialchars($car['car_grade'] ?? '') ?>" placeholder="e.g. S, X, G">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="mileage">Mileage (KM)</label>
+                            <input class="form-control" type="number" id="mileage" name="mileage" min="0" value="<?= htmlspecialchars($car['mileage_km']) ?>" placeholder="e.g. 76000">
                         </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
                         <div class="form-group">
-                            <label class="form-label" for="engine">Engine Size (CC) *</label>
-                            <input class="form-control" type="number" id="engine" name="engine" value="<?= htmlspecialchars($car['engine_cc']) ?>" placeholder="e.g. 1300" required>
+                            <label class="form-label" for="engine">Engine Size (CC)</label>
+                            <input class="form-control" type="number" id="engine" name="engine" min="0" value="<?= htmlspecialchars($car['engine_cc']) ?>" placeholder="e.g. 1300">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="transmission">Transmission *</label>
-                            <select class="form-control" id="transmission" name="transmission" required>
+                            <label class="form-label" for="transmission">Transmission</label>
+                            <select class="form-control" id="transmission" name="transmission">
                                 <option value="AT" <?= $car['transmission'] === 'AT' ? 'selected' : '' ?>>Automatic (AT)</option>
                                 <option value="MT" <?= $car['transmission'] === 'MT' ? 'selected' : '' ?>>Manual (MT)</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="drive">Drive Train *</label>
-                            <input class="form-control" type="text" id="drive" name="drive" value="<?= htmlspecialchars($car['drive_type']) ?>" placeholder="e.g. 2WD" required>
+                            <label class="form-label" for="drive">Drive Train</label>
+                            <input class="form-control" type="text" id="drive" name="drive" value="<?= htmlspecialchars($car['drive_type']) ?>" placeholder="e.g. 2WD">
                         </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
                         <div class="form-group">
-                            <label class="form-label" for="steering">Steering Direction *</label>
-                            <select class="form-control" id="steering" name="steering" required>
+                            <label class="form-label" for="steering">Steering Direction</label>
+                            <select class="form-control" id="steering" name="steering">
                                 <option value="RHD" <?= $car['steering'] === 'RHD' ? 'selected' : '' ?>>Right Hand Drive (RHD)</option>
                                 <option value="LHD" <?= $car['steering'] === 'LHD' ? 'selected' : '' ?>>Left Hand Drive (LHD)</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="fuel">Fuel Type *</label>
-                            <select class="form-control" id="fuel" name="fuel" required>
+                            <label class="form-label" for="fuel">Fuel Type</label>
+                            <select class="form-control" id="fuel" name="fuel">
                                 <option value="PETROL" <?= $car['fuel'] === 'PETROL' ? 'selected' : '' ?>>Petrol (Gasoline)</option>
                                 <option value="DIESEL" <?= $car['fuel'] === 'DIESEL' ? 'selected' : '' ?>>Diesel</option>
                                 <option value="HYBRID" <?= $car['fuel'] === 'HYBRID' ? 'selected' : '' ?>>Hybrid</option>
@@ -253,8 +263,8 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="body_type">Body Type *</label>
-                            <select class="form-control" id="body_type" name="body_type" required>
+                            <label class="form-label" for="body_type">Body Type</label>
+                            <select class="form-control" id="body_type" name="body_type">
                                 <option value="Hatchback" <?= $car['body_type'] === 'Hatchback' ? 'selected' : '' ?>>Hatchback</option>
                                 <option value="Sedan" <?= $car['body_type'] === 'Sedan' ? 'selected' : '' ?>>Sedan</option>
                                 <option value="SUV" <?= $car['body_type'] === 'SUV' ? 'selected' : '' ?>>SUV</option>
@@ -265,12 +275,12 @@ include dirname(__DIR__) . '/admin/partials/header.php';
 
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
                         <div class="form-group">
-                            <label class="form-label" for="doors">Doors Count *</label>
-                            <input class="form-control" type="number" id="doors" name="doors" value="<?= htmlspecialchars($car['doors']) ?>" required>
+                            <label class="form-label" for="doors">Doors Count</label>
+                            <input class="form-control" type="number" id="doors" name="doors" min="0" value="<?= htmlspecialchars($car['doors']) ?>">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="seats">Seats Count *</label>
-                            <input class="form-control" type="number" id="seats" name="seats" value="<?= htmlspecialchars($car['seats']) ?>" required>
+                            <label class="form-label" for="seats">Seats Count</label>
+                            <input class="form-control" type="number" id="seats" name="seats" min="0" value="<?= htmlspecialchars($car['seats']) ?>">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="stock_type">Listing Sourcing Type *</label>
@@ -280,27 +290,49 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="location">Storage Location *</label>
-                            <input class="form-control" type="text" id="location" name="location" value="<?= htmlspecialchars($car['location']) ?>" required>
+                            <label class="form-label" for="location">Storage Location</label>
+                            <input class="form-control" type="text" id="location" name="location" value="<?= htmlspecialchars(($car['location'] ?? '') === '-' ? '' : ($car['location'] ?? '')) ?>" placeholder="e.g. KOBE, JAPAN">
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px;">
                         <div class="form-group">
-                            <label class="form-label" for="color">Exterior Color *</label>
-                            <input class="form-control" type="text" id="color" name="color" value="<?= htmlspecialchars($car['color']) ?>" required>
+                            <label class="form-label" for="auction_house">Auction House Name</label>
+                            <input class="form-control" type="text" id="auction_house" name="auction_house" value="<?= htmlspecialchars($car['auction_house'] ?? '') ?>" placeholder="e.g. USS Tokyo" maxlength="100">
+                            <small style="font-size: 11px; color: var(--color-text-muted);">Admin only — not shown on the website.</small>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="dimension">Dimension *</label>
-                            <input class="form-control" type="text" id="dimension" name="dimension" value="<?= htmlspecialchars($car['dimension'] ?? '0.00m × 0.00m × 0.00m') ?>" required>
+                            <label class="form-label" for="lot_number">Lot Number</label>
+                            <input class="form-control" type="text" id="lot_number" name="lot_number" value="<?= htmlspecialchars($car['lot_number'] ?? '') ?>" placeholder="e.g. A-1234" maxlength="50">
+                            <small style="font-size: 11px; color: var(--color-text-muted);">Admin only — not shown on the website.</small>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 16px;">
+                        <div class="form-group">
+                            <label class="form-label" for="color">Exterior Color</label>
+                            <input class="form-control" type="text" id="color" name="color" value="<?= htmlspecialchars($car['color']) ?>" placeholder="e.g. White">
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="m3">M3 Volume *</label>
-                            <input class="form-control" type="text" id="m3" name="m3" value="<?= htmlspecialchars($car['m3'] ?? '10.167') ?>" required>
+                            <label class="form-label" for="dimension">Dimension</label>
+                            <input class="form-control" type="text" id="dimension" name="dimension" value="<?= htmlspecialchars($car['dimension'] ?? '0.00m × 0.00m × 0.00m') ?>" placeholder="e.g. 4.40m × 1.69m × 1.52m">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="m3">M3 Volume</label>
+                            <input class="form-control" type="text" id="m3" name="m3" value="<?= htmlspecialchars($car['m3'] ?? '10.167') ?>" placeholder="e.g. 11.30">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="views">Views Count</label>
                             <input class="form-control" type="number" id="views" name="views" value="<?= (int)$car['views'] ?>">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="status">Listing Status *</label>
+                            <select class="form-control" id="status" name="status" required>
+                                <option value="Available" <?= $car['status'] === 'Available' ? 'selected' : '' ?>>Available</option>
+                                <option value="Reserved" <?= $car['status'] === 'Reserved' ? 'selected' : '' ?>>Reserved</option>
+                                <option value="Sold" <?= $car['status'] === 'Sold' ? 'selected' : '' ?>>Sold</option>
+                                <option value="Archived" <?= $car['status'] === 'Archived' ? 'selected' : '' ?>>Archived</option>
+                            </select>
                         </div>
                     </div>
 
@@ -340,52 +372,8 @@ include dirname(__DIR__) . '/admin/partials/header.php';
 
             <!-- Right Column: Pricing, Uploads, and Totals -->
             <div>
-                
-                <!-- Card 3: Pricing Parameters -->
-                <div class="card mb-24" style="padding: 20px;">
-                    <h3 class="options-group-title" style="border: none; margin-bottom: 15px; padding: 0; display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="dollar-sign" style="color: var(--color-gold-600);"></i>
-                            <span>Pricing Breakdown (USD)</span>
-                        </div>
-                        <select class="form-control" id="pricing_currency_selector" name="pricing_currency_selector" style="width: auto; height: 32px; padding: 2px 8px; font-size: 13px; border-radius: 4px; border: 1px solid var(--color-silver-300);">
-                            <option value="USD">USD ($)</option>
-                            <option value="JPY">JPY (¥)</option>
-                        </select>
-                    </h3>
 
-                    <div class="pricing-fields-grid">
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label" for="price_vehicle">Base Vehicle Price (FOB) *</label>
-                            <input class="form-control" type="number" id="price_vehicle" name="price_vehicle" value="<?= (float)$car['fob_price'] ?>" required>
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label" for="price_jpy">Vehicle Price (JPY) *</label>
-                            <input class="form-control" type="number" id="price_jpy" name="price_jpy" value="<?= (float)($car['price_jpy'] ?? ($car['fob_price'] * 150)) ?>" required>
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label" for="price_freight">Estimated Freight Charges</label>
-                            <input class="form-control" type="number" id="price_freight" name="price_freight" value="<?= (float)$car['freight_price'] ?>">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label" for="price_vanning">Vanning Packaging Cost</label>
-                            <input class="form-control" type="number" id="price_vanning" name="price_vanning" value="<?= (float)$car['vanning_price'] ?>">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label" for="price_inspection">Inspection Certification Cost</label>
-                            <input class="form-control" type="number" id="price_inspection" name="price_inspection" value="<?= (float)$car['inspection_price'] ?>">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label" for="price_insurance">Marine Insurance Premium</label>
-                            <input class="form-control" type="number" id="price_insurance" name="price_insurance" value="<?= (float)$car['insurance_price'] ?>">
-                        </div>
-                    </div>
-
-                    <div class="total-calc-box">
-                        <h4 class="total-calc-title">Total Calculated C&F Price</h4>
-                        <p class="total-calc-amount" id="total_price_display">$<?= number_format((float)$car['cf_price']) ?></p>
-                    </div>
-                </div>
+                <?php include __DIR__ . '/partials/inventory-pricing-jpy.php'; ?>
 
                 <!-- Card 4: Uploads Dropzone -->
                 <div class="card mb-24" style="padding: 20px;">
@@ -399,13 +387,13 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                         <div class="upload-dropzone" style="padding: 20px 10px; text-align: center; border: 2px dashed var(--color-silver-300);" onclick="document.getElementById('gallery_uploader').click();">
                             <i data-lucide="upload-cloud" style="width: 28px; height: 28px; color: var(--color-silver-400); margin-bottom: 6px;"></i>
                             <p style="margin: 0; font-size: 11.5px; font-weight: 600; color: var(--color-navy-950);">Click to browse new photos</p>
-                            <input type="file" name="images[]" multiple style="display: none;" id="gallery_uploader" accept="image/*">
+                            <input type="file" name="images[]" multiple style="display: none;" id="gallery_uploader" accept="image/jpeg,image/png,image/webp">
                         </div>
                         <div class="photo-slots-grid" id="sortable-photo-slots">
                             <?php for ($i = 1; $i <= 8; $i++): 
                                 $existingImg = $existingImages[$i - 1] ?? null;
                             ?>
-                                <div class="photo-slot" draggable="true" data-index="<?= $i - 1 ?>">
+                                <div class="photo-slot" draggable="false" data-index="<?= $i - 1 ?>">
                                     <span class="slot-number">Slot <?= $i ?></span>
                                     <div class="slot-preview">
                                         <?php if ($existingImg): ?>
@@ -446,5 +434,10 @@ include dirname(__DIR__) . '/admin/partials/header.php';
         </div>
     </form>
 </div>
+
+<script>
+window.EisenMakeModels = <?= json_encode($makeToModels ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+window.EisenSelectedModel = <?= json_encode($selectedModel ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+</script>
 
 <?php include dirname(__DIR__) . '/admin/partials/footer.php'; ?>

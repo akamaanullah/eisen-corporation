@@ -24,18 +24,16 @@
           <li><a href="<?= BASE_URL ?>/about" data-i18n="nav.about">About Us</a></li>
           <li><a href="<?= BASE_URL ?>/why-choose-eisen" data-i18n="whyChoose.title">Why Choose Eisen</a></li>
           <li><a href="<?= BASE_URL ?>/account-guide" data-i18n="accountGuide.title">How to create your account</a></li>
-          <li><a href="<?= BASE_URL ?>/blog" data-i18n="nav.blog">Blog</a></li>
-          <li><a href="<?= BASE_URL ?>/listing" data-i18n="nav.sellers">Available Stock</a></li>
-          <!-- <li><a href="<?= BASE_URL ?>/chassis-check" data-i18n="chassis.title">Chassis Check</a></li> -->
-          <li><a href="<?= BASE_URL ?>/faq" data-i18n="nav.faq">FAQ</a></li>
-          <li><a href="<?= BASE_URL ?>/contact" data-i18n="nav.contacts">Contacts</a></li>
+          <li><a href="<?= BASE_URL ?>/blogs" data-i18n="nav.blog">Blog</a></li>
         </ul>
       </div>
 
       <div class="site-footer__col">
         <h3 class="site-footer__heading" data-i18n="footer.services">Our Services</h3>
         <ul class="site-footer__links site-footer__links--arrow-hover">
+          <li><a href="<?= BASE_URL ?>/listing" data-i18n="nav.sellers">Available Stock</a></li>
           <li><a href="<?= BASE_URL ?>/price-calculation" data-i18n="priceCalc.title">Price Calculation</a></li>
+          <li><a href="<?= BASE_URL ?>/faq" data-i18n="nav.faq">FAQ</a></li>
           <li><a href="<?= BASE_URL ?>/contact" data-i18n="footer.urgent">Urgent Purchase</a></li>
         </ul>
       </div>
@@ -74,13 +72,16 @@
   <script src="<?= BASE_URL ?>/public/js/locale-i18n.js" defer></script>
   <script src="<?= BASE_URL ?>/public/js/currency.js" defer></script>
   <script src="<?= BASE_URL ?>/public/js/main.js" defer></script>
-  <script src="<?= BASE_URL ?>/public/js/listing.js" defer></script>
+  <script src="<?= BASE_URL ?>/public/js/listing.js?v=1.4" defer></script>
+<?php if (!empty($loadProductScript)): ?>
+  <script src="<?= BASE_URL ?>/public/js/product.js?v=1.5" defer></script>
+<?php endif; ?>
 <?php if (!empty($loadAccountScripts)): ?>
   <?php if (!empty($loadAccountPaymentPicker)): ?>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
   <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js" defer></script>
   <?php endif; ?>
-  <script src="<?= BASE_URL ?>/public/js/account.js" defer></script>
+  <script src="<?= BASE_URL ?>/public/js/account.js?v=1.4" defer></script>
 <?php endif; ?>
 </body>
 </html>

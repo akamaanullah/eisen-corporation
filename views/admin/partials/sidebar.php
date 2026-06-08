@@ -63,6 +63,20 @@ function isPageActive($path) {
                     <span class="link-label">Reports & Analytics</span>
                 </a>
             </li>
+            
+            <li class="nav-item">
+                <a href="<?= BASE_URL ?>/admin/content" class="nav-link <?= isPageActive('/admin/content') ?>">
+                    <i data-lucide="layout"></i>
+                    <span class="link-label">Frontstore Content</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a href="<?= BASE_URL ?>/admin/blog" class="nav-link <?= isPageActive('/admin/blog') ?>">
+                    <i data-lucide="file-text"></i>
+                    <span class="link-label">Blog Posts</span>
+                </a>
+            </li>
         </ul>
     </nav>
 

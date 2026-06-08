@@ -3,6 +3,7 @@ namespace App\Controllers\Front;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Helpers\VehicleDisplay;
 use PDO;
 
 class ProductController extends Controller {
@@ -15,10 +16,10 @@ class ProductController extends Controller {
             try {
                 $db = Database::getConnection();
                 if ($excludeId !== null) {
-                    $recStmt = $db->prepare("SELECT v.*, (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as main_image FROM vehicles v WHERE v.status = 'available' AND v.id != ? LIMIT 3");
+                    $recStmt = $db->prepare("SELECT v.*, (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as main_image FROM vehicles v WHERE v.status = 'Available' AND v.id != ? LIMIT 3");
                     $recStmt->execute([$excludeId]);
                 } else {
-                    $recStmt = $db->query("SELECT v.*, (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as main_image FROM vehicles v WHERE v.status = 'available' LIMIT 3");
+                    $recStmt = $db->query("SELECT v.*, (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) as main_image FROM vehicles v WHERE v.status = 'Available' LIMIT 3");
                 }
                 $recs = $recStmt->fetchAll(PDO::FETCH_ASSOC);
                 $recommendations = [];
@@ -26,11 +27,12 @@ class ProductController extends Controller {
                     $recommendations[] = [
                         'id' => $rec['id'],
                         'stockId' => $rec['stock_id'],
-                        'title' => $rec['year'] . ' ' . strtoupper($rec['make']) . ' ' . $rec['model'],
-                        'priceJpy' => (int)($rec['price_jpy'] ?? ($rec['fob_price'] * 150)),
+                        'title' => VehicleDisplay::title((int) $rec['year'], $rec['make'], $rec['model'], $rec['car_grade'] ?? ''),
+                        'priceJpy' => (int)(!empty($rec['price_jpy']) && (float)$rec['price_jpy'] > 0 ? $rec['price_jpy'] : ($rec['fob_price'] * 150)),
+                        'priceUsd' => (float)$rec['fob_price'],
                         'mileageKm' => $rec['mileage_km'],
-                        'location' => $rec['location'],
-                        'image' => $rec['main_image'] ?: 'photo-1606664515524-ed2f786a0bd6',
+                        'location' => VehicleDisplay::location($rec['location']),
+                        'image' => $rec['main_image'] ?: '/public/image/car-placeholder.png',
                     ];
                 }
                 return $recommendations;
@@ -87,16 +89,24 @@ class ProductController extends Controller {
             $db->prepare("UPDATE vehicles SET views = views + 1 WHERE id = ?")->execute([$car['id']]);
             $viewsCount = (int)$car['views'] + 1;
 
+            $modelDisplay = VehicleDisplay::modelWithGrade($car['model'], $car['car_grade'] ?? '');
+
             // Map database columns to the frontend keys
             $vehicle = [
+                'id' => $car['id'],
                 'stockId' => $car['stock_id'],
                 'location' => $car['location'],
-                'title' => $car['year'] . ' ' . strtoupper($car['make']) . ' ' . $car['model'],
+                'locationDisplay' => VehicleDisplay::location($car['location']),
+                'title' => VehicleDisplay::title((int) $car['year'], $car['make'], $car['model'], $car['car_grade'] ?? ''),
+                'model' => $car['model'],
+                'modelDisplay' => $modelDisplay,
+                'carGrade' => trim((string) ($car['car_grade'] ?? '')),
                 'modelCode' => $car['chassis_number'],
                 'year' => $car['year'],
                 'manufactureYear' => $car['year'],
                 'bodyType' => $car['body_type'],
-                'priceJpy' => (int)($car['price_jpy'] ?? ($car['fob_price'] * 150)), // convert to JPY using a standard export rate of 150 or use manual JPY price if set
+                'priceJpy' => (int)(!empty($car['price_jpy']) && (float)$car['price_jpy'] > 0 ? $car['price_jpy'] : ($car['fob_price'] * 150)), // convert to JPY using a standard export rate of 150 or use manual JPY price if set
+                'priceUsd' => (float)$car['fob_price'],
                 'priceMode' => 'fob',
                 'reviews' => $reviewsCount,
                 'views' => $viewsCount,
@@ -106,13 +116,26 @@ class ProductController extends Controller {
                 'description' => $car['description'],
                 'mileageKm' => $car['mileage_km'],
                 'engineCc' => $car['engine_cc'],
+                'mileageDisplay' => VehicleDisplay::mileageKm((int) $car['mileage_km']),
+                'engineDisplay' => VehicleDisplay::engineCc((int) $car['engine_cc']),
                 'transmission' => $car['transmission'],
+                'transmissionDisplay' => VehicleDisplay::transmission($car['transmission']),
                 'drive' => $car['drive_type'],
+                'driveDisplay' => VehicleDisplay::drive($car['drive_type']),
                 'steering' => $car['steering'],
+                'steeringDisplay' => VehicleDisplay::steering($car['steering']),
                 'fuel' => $car['fuel'],
+                'fuelDisplay' => VehicleDisplay::upperText($car['fuel']),
                 'doors' => $car['doors'],
                 'seats' => $car['seats'],
+                'doorsDisplay' => VehicleDisplay::count((int) $car['doors']),
+                'seatsDisplay' => VehicleDisplay::count((int) $car['seats']),
             ];
+
+            $isFavorited = false;
+            if (\App\Core\Session::get('is_logged_in') === true) {
+                $isFavorited = \App\Models\Vehicle::isFavorited(\App\Core\Session::get('user_id'), $car['id']);
+            }
 
             // Fetch images
             $imgStmt = $db->prepare("SELECT image_url FROM vehicle_images WHERE vehicle_id = ? ORDER BY sort_order ASC");
@@ -128,44 +151,45 @@ class ProductController extends Controller {
                     ];
                 }
             } else {
-                // Fallback to unsplash mock photos if no images uploaded
+                // Fallback to local vehicle silhouette placeholder if no images uploaded
                 $gallery = [
-                    ['label' => 'Front exterior', 'src' => 'photo-1606664515524-ed2f786a0bd6'],
-                    ['label' => 'Side profile', 'src' => 'photo-1549317661-bd32c8ce0db2'],
+                    ['label' => 'Main View', 'src' => '/public/image/car-placeholder.png']
                 ];
             }
 
             // Create vehicle details list
             $vehicleDetails = [
                 ['label' => 'Make', 'value' => strtoupper($car['make'])],
-                ['label' => 'Model', 'value' => $car['chassis_number']],
-                ['label' => 'Body color', 'value' => strtoupper($car['color'])],
-                ['label' => 'Body type', 'value' => $car['body_type']],
-                ['label' => 'Doors', 'value' => (string)$car['doors']],
-                ['label' => 'Seats', 'value' => (string)$car['seats']],
+                ['label' => 'Model', 'value' => $modelDisplay],
+                ['label' => 'Body color', 'value' => VehicleDisplay::upperText($car['color'])],
+                ['label' => 'Body type', 'value' => VehicleDisplay::text($car['body_type'])],
+                ['label' => 'Doors', 'value' => VehicleDisplay::count((int) $car['doors'])],
+                ['label' => 'Seats', 'value' => VehicleDisplay::count((int) $car['seats'])],
             ];
 
             // Specifications
             $specifications = [
-                ['label' => 'Dimension', 'value' => $car['dimension']],
-                ['label' => 'M3', 'value' => $car['m3']],
-                ['label' => 'Transmission', 'value' => $car['transmission'] === 'AT' ? 'Automatic (AT)' : 'Manual (MT)'],
-                ['label' => 'Drive Type', 'value' => $car['drive_type']],
-                ['label' => 'Steering', 'value' => $car['steering'] === 'RHD' ? 'Right Hand Drive' : 'Left Hand Drive'],
-                ['label' => 'Fuel', 'value' => $car['fuel']],
+                ['label' => 'Dimension', 'value' => VehicleDisplay::dimension($car['dimension'])],
+                ['label' => 'M3', 'value' => VehicleDisplay::cubicMeters($car['m3'])],
+                ['label' => 'Transmission', 'value' => VehicleDisplay::transmission($car['transmission'])],
+                ['label' => 'Drive Type', 'value' => VehicleDisplay::drive($car['drive_type'])],
+                ['label' => 'Steering', 'value' => VehicleDisplay::steering($car['steering'])],
+                ['label' => 'Fuel', 'value' => VehicleDisplay::upperText($car['fuel'])],
             ];
 
-            // Fetch checked options IDs
-            $optMapStmt = $db->prepare("SELECT option_id FROM vehicle_options WHERE vehicle_id = ?");
-            $optMapStmt->execute([$car['id']]);
-            $checkedOptionIds = $optMapStmt->fetchAll(PDO::FETCH_COLUMN);
-
-            // Fetch all options
-            $optStmt = $db->query("SELECT * FROM options ORDER BY category, label");
-            $allOptions = $optStmt->fetchAll(PDO::FETCH_ASSOC);
+            // Fetch only options selected for this vehicle
+            $optStmt = $db->prepare("
+                SELECT o.label, o.category
+                FROM options o
+                INNER JOIN vehicle_options vo ON vo.option_id = o.id
+                WHERE vo.vehicle_id = ?
+                ORDER BY o.category, o.label
+            ");
+            $optStmt->execute([$car['id']]);
+            $vehicleOptions = $optStmt->fetchAll(PDO::FETCH_ASSOC);
 
             $optionGroups = [];
-            foreach ($allOptions as $opt) {
+            foreach ($vehicleOptions as $opt) {
                 $category = $opt['category'];
                 if (!isset($optionGroups[$category])) {
                     $optionGroups[$category] = [
@@ -182,7 +206,6 @@ class ProductController extends Controller {
                 }
                 $optionGroups[$category]['items'][] = [
                     'label' => $opt['label'],
-                    'active' => in_array($opt['id'], $checkedOptionIds)
                 ];
             }
 
@@ -198,21 +221,55 @@ class ProductController extends Controller {
                 return ($order[$a] ?? 99) <=> ($order[$b] ?? 99);
             });
 
-            // Estimate details
+            // Fetch shipping destinations
+            $destCountries = [];
+            $destPorts = [];
+            $countryToPorts = [];
+            try {
+                $destStmt = $db->query("SELECT * FROM shipping_destinations WHERE status = 1 ORDER BY country ASC, port ASC");
+                $destData = $destStmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                foreach ($destData as $row) {
+                    $country = strtoupper($row['country']);
+                    $port = strtoupper($row['port']);
+                    
+                    if (!in_array($country, $destCountries)) {
+                        $destCountries[] = $country;
+                    }
+                    if (!in_array($port, $destPorts)) {
+                        $destPorts[] = $port;
+                    }
+                    if (!isset($countryToPorts[$country])) {
+                        $countryToPorts[$country] = [];
+                    }
+                    $countryToPorts[$country][] = $port;
+                }
+            } catch (\Exception $ex) {
+                $destCountries = ['PAKISTAN', 'KENYA', 'TANZANIA', 'BANGLADESH', 'SRI LANKA'];
+                $destPorts = ['ISLAMABAD', 'KARACHI', 'MOMBASA', 'DAR ES SALAAM'];
+                $countryToPorts = [
+                    'PAKISTAN' => ['KARACHI', 'ISLAMABAD'],
+                    'KENYA' => ['MOMBASA'],
+                    'TANZANIA' => ['DAR ES SALAAM']
+                ];
+            }
+
             $estimate = [
-                'countries' => ['PAKISTAN', 'KENYA', 'TANZANIA', 'BANGLADESH', 'SRI LANKA'],
-                'ports' => ['ISLAMABAD', 'KARACHI', 'MOMBASA', 'DAR ES SALAAM'],
+                'countries' => $destCountries,
+                'ports' => $destPorts,
+                'countryToPorts' => $countryToPorts,
                 'shipments' => ['roro', 'container'],
             ];
 
-            // Pricing Breakdown in JPY
+            // Pricing Breakdown in USD — live JPY conversion is handled client-side by currency.js
+            // Storing static price_jpy (fob_price × 150) was incorrect because the live rate fluctuates.
             $pricingBreakdown = [
-                ['label' => 'Vehicle Price', 'i18n' => 'product.pricing.vehicle', 'jpy' => (int)($car['price_jpy'] ?? ($car['fob_price'] * 150))],
-                ['label' => 'Freight Amount', 'i18n' => 'product.pricing.freight', 'jpy' => (int)($car['freight_price'] * 150)],
-                ['label' => 'Vanning Amount', 'i18n' => 'product.pricing.vanning', 'jpy' => (int)($car['vanning_price'] * 150)],
-                ['label' => 'Inspection Amount', 'i18n' => 'product.pricing.inspection', 'jpy' => (int)($car['inspection_price'] * 150)],
-                ['label' => 'Insurance Amount', 'i18n' => 'product.pricing.insurance', 'jpy' => (int)($car['insurance_price'] * 150)],
-                ['label' => 'Coupon', 'i18n' => 'product.pricing.coupon', 'jpy' => 0],
+                ['label' => 'Vehicle Price',    'i18n' => 'product.pricing.vehicle',    'usd' => (float)$car['fob_price']],
+                ['label' => 'Freight Amount',   'i18n' => 'product.pricing.freight',    'usd' => (float)$car['freight_price']],
+                ['label' => 'Vanning Amount',   'i18n' => 'product.pricing.vanning',    'usd' => (float)$car['vanning_price']],
+                ['label' => 'Inspection Amount','i18n' => 'product.pricing.inspection', 'usd' => (float)$car['inspection_price']],
+                ['label' => 'Insurance Amount', 'i18n' => 'product.pricing.insurance',  'usd' => (float)$car['insurance_price']],
+                ['label' => 'Coupon',           'i18n' => 'product.pricing.coupon',     'usd' => 0.0],
             ];
 
             $this->view('front/product', [
@@ -224,7 +281,8 @@ class ProductController extends Controller {
                 'optionGroups' => $optionGroups,
                 'estimate' => $estimate,
                 'pricingBreakdown' => $pricingBreakdown,
-                'recommendations' => $getRecommendations($car['id'])
+                'recommendations' => $getRecommendations($car['id']),
+                'isFavorited' => $isFavorited
             ]);
 
         } catch (\Exception $e) {

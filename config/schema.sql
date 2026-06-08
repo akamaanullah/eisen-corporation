@@ -18,14 +18,23 @@ SET FOREIGN_KEY_CHECKS = 1;
 CREATE TABLE IF NOT EXISTS `users` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(100) NOT NULL,
+    `first_name` VARCHAR(100) NULL,
+    `last_name` VARCHAR(100) NULL,
     `email` VARCHAR(100) UNIQUE NOT NULL,
     `password` VARCHAR(255) NOT NULL,
+    `reset_token` VARCHAR(255) NULL,
+    `reset_token_expires` DATETIME NULL,
     `role` ENUM('admin', 'finance_officer', 'caller_agent', 'registered_buyer', 'inventory_manager') NOT NULL DEFAULT 'registered_buyer',
     `account_type` ENUM('Individual Buyer', 'Corporate Buyer', 'Inventory Manager') NOT NULL DEFAULT 'Individual Buyer',
     `phone` VARCHAR(25) NULL,
     `whatsapp` VARCHAR(25) NULL,
     `country` VARCHAR(50) NULL,
     `destination_port` VARCHAR(100) NULL,
+    `address` VARCHAR(255) NULL,
+    `address2` VARCHAR(255) NULL,
+    `city` VARCHAR(100) NULL,
+    `state` VARCHAR(100) NULL,
+    `zip` VARCHAR(20) NULL,
     `company_name` VARCHAR(100) NULL,
     `preferred_currency` ENUM('USD', 'JPY') NOT NULL DEFAULT 'USD',
     `asf_confirmed` TINYINT(1) NOT NULL DEFAULT 0, -- Anti-Social Forces compliance
@@ -43,12 +52,15 @@ CREATE TABLE IF NOT EXISTS `users` (
 CREATE TABLE IF NOT EXISTS `vehicles` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `stock_id` VARCHAR(30) UNIQUE NOT NULL, -- e.g. ST-2094, AUC-9824
-    `chassis_number` VARCHAR(50) UNIQUE NOT NULL, -- Unique identifier VIN
+    `chassis_number` VARCHAR(50) NOT NULL,
     `type` ENUM('In-Stock', 'Auction') NOT NULL,
+    `auction_house` VARCHAR(100) NOT NULL DEFAULT '',
+    `lot_number` VARCHAR(50) NOT NULL DEFAULT '',
     `make` VARCHAR(50) NOT NULL,
     `model` VARCHAR(50) NOT NULL,
     `year` INT NOT NULL,
-    `grade` VARCHAR(15) NOT NULL, -- e.g. 4.5, 5.0, R
+    `grade` VARCHAR(15) NOT NULL, -- e.g. 4.5, 5.0, R (auction inspection grade)
+    `car_grade` VARCHAR(30) NOT NULL DEFAULT '', -- e.g. S, X, G (trim / model grade)
     `mileage_km` INT NOT NULL,
     `engine_cc` INT NOT NULL,
     `transmission` ENUM('AT', 'MT') NOT NULL DEFAULT 'AT',
@@ -72,7 +84,7 @@ CREATE TABLE IF NOT EXISTS `vehicles` (
     `description` TEXT NULL,
     `views` INT NOT NULL DEFAULT 0,
     `damage_report_url` VARCHAR(255) NULL, -- Path to inspection check-sheet PDF
-    `status` ENUM('Available', 'Reserved', 'Reservation Expired', 'Payment Pending', 'Payment Received', 'Shipping In Progress', 'Delivered', 'Sold') NOT NULL DEFAULT 'Available',
+    `status` ENUM('Available', 'Reserved', 'Reservation Expired', 'Payment Pending', 'Payment Received', 'Shipping In Progress', 'Delivered', 'Sold', 'Archived') NOT NULL DEFAULT 'Available',
     `featured` TINYINT(1) NOT NULL DEFAULT 0, -- Show on hero homepage list
     `arrival_date` DATE NULL, -- For in-transit stock
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -250,6 +262,45 @@ CREATE TABLE IF NOT EXISTS `payments` (
     CONSTRAINT `fk_pays_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_pays_vehicle` FOREIGN KEY (`vehicle_id`) REFERENCES `vehicles` (`id`) ON DELETE CASCADE,
     INDEX `idx_pays_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================================
+-- TABLE: `consignees`
+-- Buyer consignee and notify-party details for export documents
+-- ========================================================
+CREATE TABLE IF NOT EXISTS `consignees` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `user_id` INT NOT NULL,
+    `consignee_name` VARCHAR(150) NOT NULL DEFAULT '',
+    `consignee_country` VARCHAR(100) NOT NULL DEFAULT '',
+    `consignee_state` VARCHAR(100) NOT NULL DEFAULT '',
+    `consignee_city` VARCHAR(100) NOT NULL DEFAULT '',
+    `consignee_address` VARCHAR(255) NOT NULL DEFAULT '',
+    `consignee_ref_address` VARCHAR(255) NOT NULL DEFAULT '',
+    `consignee_phone_1` VARCHAR(30) NOT NULL DEFAULT '',
+    `consignee_phone_2` VARCHAR(30) NOT NULL DEFAULT '',
+    `consignee_phone_3` VARCHAR(30) NOT NULL DEFAULT '',
+    `consignee_email_1` VARCHAR(150) NOT NULL DEFAULT '',
+    `consignee_email_2` VARCHAR(150) NOT NULL DEFAULT '',
+    `consignee_email_3` VARCHAR(150) NOT NULL DEFAULT '',
+    `notify_name` VARCHAR(150) NOT NULL DEFAULT '',
+    `notify_country` VARCHAR(100) NOT NULL DEFAULT '',
+    `notify_state` VARCHAR(100) NOT NULL DEFAULT '',
+    `notify_city` VARCHAR(100) NOT NULL DEFAULT '',
+    `notify_address` VARCHAR(255) NOT NULL DEFAULT '',
+    `notify_ref_address` VARCHAR(255) NOT NULL DEFAULT '',
+    `notify_phone_1` VARCHAR(30) NOT NULL DEFAULT '',
+    `notify_phone_2` VARCHAR(30) NOT NULL DEFAULT '',
+    `notify_phone_3` VARCHAR(30) NOT NULL DEFAULT '',
+    `notify_email_1` VARCHAR(150) NOT NULL DEFAULT '',
+    `notify_email_2` VARCHAR(150) NOT NULL DEFAULT '',
+    `notify_email_3` VARCHAR(150) NOT NULL DEFAULT '',
+    `notify_same` TINYINT(1) NOT NULL DEFAULT 0,
+    `permanent` TINYINT(1) NOT NULL DEFAULT 0,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_consignees_user` (`user_id`),
+    CONSTRAINT `fk_consignees_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================================================

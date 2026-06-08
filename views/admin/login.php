@@ -230,6 +230,7 @@
       <?php endif; ?>
 
       <form action="<?= BASE_URL ?>/admin/login" method="POST" autocomplete="off">
+        <?= $this->csrf_field() ?>
         <div class="form-group">
           <label class="form-label" for="admin-email">Email Address</label>
           <div class="form-input-wrapper">

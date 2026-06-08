@@ -2,10 +2,12 @@
 namespace App\Controllers\Front;
 
 use App\Core\Controller;
+use App\Helpers\HtmlSanitizer;
+use PDO;
 
 class BlogController extends Controller {
     public function index() {
-        $posts = $this->getPosts();
+        $posts = self::getPosts();
         $categories = $this->getCategories();
 
         $featured = null;
@@ -29,7 +31,7 @@ class BlogController extends Controller {
     }
 
     public function show($slug) {
-        $posts = $this->getPosts();
+        $posts = self::getPosts();
         $post = null;
 
         foreach ($posts as $item) {
@@ -41,7 +43,7 @@ class BlogController extends Controller {
 
         if (!$post) {
             http_response_code(404);
-            echo '<h1>404 Not Found</h1><p>Article not found. <a href="' . BASE_URL . '/blog">Back to blog</a></p>';
+            echo '<h1>404 Not Found</h1><p>Article not found. <a href="' . BASE_URL . '/blogs">Back to blog</a></p>';
             exit;
         }
 
@@ -106,6 +108,28 @@ class BlogController extends Controller {
             return $bodies[$post['slug']];
         }
 
+        if (!empty($post['content'])) {
+            if (HtmlSanitizer::containsHtml($post['content'])) {
+                return [
+                    ['type' => 'raw_html', 'html' => HtmlSanitizer::sanitizeBlogHtml($post['content'])],
+                ];
+            }
+            $paragraphs = explode("\n\n", str_replace("\r", "", $post['content']));
+            $blocks = [];
+            foreach ($paragraphs as $p) {
+                $p = trim($p);
+                if (empty($p)) continue;
+                if (str_starts_with($p, '## ')) {
+                    $blocks[] = ['type' => 'h2', 'text' => substr($p, 3)];
+                } elseif (str_starts_with($p, '# ')) {
+                    $blocks[] = ['type' => 'h2', 'text' => substr($p, 2)];
+                } else {
+                    $blocks[] = ['type' => 'p', 'text' => $p];
+                }
+            }
+            return $blocks;
+        }
+
         return [
             ['type' => 'p', 'text' => $post['excerpt']],
             ['type' => 'h2', 'text' => 'Key takeaways for importers'],
@@ -133,125 +157,32 @@ class BlogController extends Controller {
         ];
     }
 
-    private function getPosts(): array {
-        return [
-            [
-                'slug' => 'read-uss-auction-sheet',
-                'title' => 'How to Read a USS Auction Sheet Before You Bid',
-                'category' => 'Japan Auctions',
-                'categoryKey' => 'auctions',
-                'date' => '2025-05-12',
-                'dateLabel' => 'May 12, 2025',
-                'readMin' => 8,
-                'excerpt' => 'Learn what auction grades, inspector notes, and chassis codes mean so you can shortlist vehicles with confidence before export.',
-                'image' => 'photo-1618843479313-40f8afb4b4d8',
-                'featured' => true,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'jpy-usd-import-budget',
-                'title' => 'How JPY–USD Moves Affect Your Import Budget',
-                'category' => 'Market & Pricing',
-                'categoryKey' => 'market',
-                'date' => '2025-05-02',
-                'dateLabel' => 'May 2, 2025',
-                'readMin' => 6,
-                'excerpt' => 'A practical guide for dealers tracking yen volatility, landed cost, and when to lock in conversion for Japan auction purchases.',
-                'image' => 'photo-1553440569-bcc63803a83d',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'first-time-japan-import-checklist',
-                'title' => 'First-Time Japan Import Checklist for Private Buyers',
-                'category' => 'Buying Guides',
-                'categoryKey' => 'guides',
-                'date' => '2025-04-18',
-                'dateLabel' => 'April 18, 2025',
-                'readMin' => 10,
-                'excerpt' => 'From auction selection to port arrival — documents, inspection, and timelines importers should plan before placing a bid.',
-                'image' => 'photo-1606664515524-ed2f786a0bd6',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'export-shipping-timelines',
-                'title' => 'Export Shipping Timelines: RoRo vs Container Explained',
-                'category' => 'Import & Export',
-                'categoryKey' => 'export',
-                'date' => '2025-04-05',
-                'dateLabel' => 'April 5, 2025',
-                'readMin' => 7,
-                'excerpt' => 'Compare roll-on roll-off and container options, typical port schedules, and how Eisen coordinates logistics for global buyers.',
-                'image' => 'photo-1549317661-bd32c8ce0db2',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'hybrid-suv-demand-2025',
-                'title' => 'Why Hybrid SUVs Dominate Japan Auction Demand in 2025',
-                'category' => 'Vehicle Spotlights',
-                'categoryKey' => 'spotlights',
-                'date' => '2025-03-22',
-                'dateLabel' => 'March 22, 2025',
-                'readMin' => 5,
-                'excerpt' => 'Market trends behind Toyota and Honda hybrid stock — resale appeal, grade availability, and what dealers are stocking overseas.',
-                'image' => 'photo-1503376780353-7e6692767b70',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'dealer-vs-private-auction',
-                'title' => 'Dealer vs Private Buyer: Choosing the Right Auction Lane',
-                'category' => 'Buying Guides',
-                'categoryKey' => 'guides',
-                'date' => '2025-03-08',
-                'dateLabel' => 'March 8, 2025',
-                'readMin' => 6,
-                'excerpt' => 'Understand lane access, fees, and volume advantages so your sourcing strategy matches your business model.',
-                'image' => 'photo-1552519507-da3b142c6e3d',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'eisen-inspection-process',
-                'title' => 'Inside Eisen\'s Pre-Export Inspection Process',
-                'category' => 'Company',
-                'categoryKey' => 'company',
-                'date' => '2025-02-14',
-                'dateLabel' => 'February 14, 2025',
-                'readMin' => 5,
-                'excerpt' => 'How our team verifies auction listings, documents condition reports, and prepares vehicles for international handover.',
-                'image' => 'photo-1555215695-3004980ad54e',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'grade-r-repair-history',
-                'title' => 'Grade R and Repair History: What Importers Should Know',
-                'category' => 'Japan Auctions',
-                'categoryKey' => 'auctions',
-                'date' => '2025-01-30',
-                'dateLabel' => 'January 30, 2025',
-                'readMin' => 9,
-                'excerpt' => 'When a repaired auction vehicle is worth considering, red flags on sheets, and how to price refurbishment into landed cost.',
-                'image' => 'photo-1519641471654-76ce0107ad1b',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-            [
-                'slug' => 'winter-auction-season-tips',
-                'title' => 'Winter Auction Season: Bidding Tips for Snow-Belt Stock',
-                'category' => 'Japan Auctions',
-                'categoryKey' => 'auctions',
-                'date' => '2025-01-12',
-                'dateLabel' => 'January 12, 2025',
-                'readMin' => 4,
-                'excerpt' => 'Seasonal supply shifts, underbody rust checks, and models that hold value when sourced from northern Japan auctions.',
-                'image' => 'photo-1492144534655-ae79c964c9d7',
-                'featured' => false,
-                'author' => 'Eisen Export Team',
-            ],
-        ];
+    public static function getPosts(): array {
+        try {
+            $db = \App\Core\Database::getConnection();
+            $stmt = $db->query("SELECT * FROM blog_posts ORDER BY published_date DESC");
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $posts = [];
+            foreach ($rows as $index => $row) {
+                $posts[] = [
+                    'slug' => $row['slug'],
+                    'title' => $row['title'],
+                    'category' => $row['category'],
+                    'categoryKey' => $row['category_key'],
+                    'date' => $row['published_date'],
+                    'dateLabel' => date('F j, Y', strtotime($row['published_date'])),
+                    'readMin' => (int)$row['read_min'],
+                    'excerpt' => $row['excerpt'],
+                    'image' => $row['image'],
+                    'featured' => ($index === 0),
+                    'author' => $row['author'],
+                    'content' => $row['content']
+                ];
+            }
+            return $posts;
+        } catch (\Exception $e) {
+            return [];
+        }
     }
 }

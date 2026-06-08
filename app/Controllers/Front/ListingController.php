@@ -3,11 +3,44 @@ namespace App\Controllers\Front;
 
 use App\Core\Controller;
 use App\Core\Database;
+use App\Core\Session;
+use App\Helpers\VehicleDisplay;
 use PDO;
 
 class ListingController extends Controller {
     public function index() {
-        $this->view('front/listing');
+        try {
+            $db = Database::getConnection();
+            
+            // Fetch unique makes
+            $makesStmt = $db->query("SELECT DISTINCT make FROM master_makes_models ORDER BY make ASC");
+            $dbMakes = $makesStmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            // Fetch unique models
+            $modelsStmt = $db->query("SELECT DISTINCT model FROM master_makes_models ORDER BY model ASC");
+            $dbModels = $modelsStmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            // Fetch unique fuel types from vehicles
+            $fuelStmt = $db->query("SELECT DISTINCT fuel FROM vehicles WHERE fuel IS NOT NULL AND fuel != '' ORDER BY fuel ASC");
+            $dbFuels = $fuelStmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            // Fetch unique colors from vehicles
+            $colorStmt = $db->query("SELECT DISTINCT color FROM vehicles WHERE color IS NOT NULL AND color != '' ORDER BY color ASC");
+            $dbColors = $colorStmt->fetchAll(PDO::FETCH_COLUMN);
+            
+        } catch (\Exception $e) {
+            $dbMakes = [];
+            $dbModels = [];
+            $dbFuels = [];
+            $dbColors = [];
+        }
+
+        $this->view('front/listing', [
+            'makes' => $dbMakes,
+            'models' => $dbModels,
+            'fuels' => $dbFuels,
+            'colors' => $dbColors
+        ]);
     }
 
     public function api() {
@@ -43,7 +76,14 @@ class ListingController extends Controller {
                 
                 if ($hasOthers) {
                     // Exclude all standard makes in listing
-                    $standardMakes = ['audi', 'bmw', 'daihatsu', 'ford', 'hino', 'honda', 'isuzu', 'lexus', 'mazda', 'mercedes', 'mitsubishi', 'nissan', 'porsche', 'subaru', 'suzuki', 'toyota', 'volkswagen', 'volvo'];
+                    $standardMakes = [];
+                    try {
+                        $stdMakesStmt = $db->query("SELECT DISTINCT LOWER(make) FROM master_makes_models");
+                        $standardMakes = $stdMakesStmt->fetchAll(PDO::FETCH_COLUMN);
+                    } catch (\Exception $ex) {}
+                    if (empty($standardMakes)) {
+                        $standardMakes = ['audi', 'bmw', 'daihatsu', 'ford', 'hino', 'honda', 'isuzu', 'lexus', 'mazda', 'mercedes', 'mitsubishi', 'nissan', 'porsche', 'subaru', 'suzuki', 'toyota', 'volkswagen', 'volvo'];
+                    }
                     $excludeList = [];
                     foreach ($standardMakes as $sm) {
                         $paramName = 'std_make_' . $idx++;
@@ -87,7 +127,17 @@ class ListingController extends Controller {
                 }
                 
                 if ($hasOthers) {
-                    $standardModels = ['prius', 'aqua', 'corolla', 'camry', 'highlander', 'rav4', 'land-cruiser', 'alphard', 'hiace', 'fit', 'civic', 'cr-v', 'accord', 'vezel', 'note', 'leaf', 'x-trail', 'skyline', 'cx-5', 'demio', 'forester', 'impreza', 'swift', 'jimny', 'x5', '3-series', 'c-class', 'e-class', 'q5', 'a4'];
+                    $standardModels = [];
+                    try {
+                        $stdModelsStmt = $db->query("SELECT DISTINCT LOWER(model) FROM master_makes_models");
+                        $rawModels = $stdModelsStmt->fetchAll(PDO::FETCH_COLUMN);
+                        foreach ($rawModels as $rm) {
+                            $standardModels[] = str_replace(' ', '-', $rm);
+                        }
+                    } catch (\Exception $ex) {}
+                    if (empty($standardModels)) {
+                        $standardModels = ['prius', 'aqua', 'corolla', 'camry', 'highlander', 'rav4', 'land-cruiser', 'alphard', 'hiace', 'fit', 'civic', 'cr-v', 'accord', 'vezel', 'note', 'leaf', 'x-trail', 'skyline', 'cx-5', 'demio', 'forester', 'impreza', 'swift', 'jimny', 'x5', '3-series', 'c-class', 'e-class', 'q5', 'a4'];
+                    }
                     $excludeConds = [];
                     foreach ($standardModels as $sm) {
                         $paramName = 'std_model_' . $idx++;
@@ -279,11 +329,20 @@ class ListingController extends Controller {
                                (SELECT image_url FROM vehicle_images WHERE vehicle_id = v.id ORDER BY sort_order ASC LIMIT 1) AS image_url 
                         FROM vehicles v 
                         WHERE {$whereClause} 
-                        ORDER BY v.featured DESC, v.id DESC 
+                        ORDER BY v.id DESC 
                         LIMIT {$perPage} OFFSET {$offset}";
             $dataStmt = $db->prepare($dataSql);
             $dataStmt->execute($params);
             $cars = $dataStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Fetch logged-in user's favorites to tag listing items
+            $userFavoriteIds = [];
+            $userId = Session::isLoggedIn() ? Session::get('user_id') : null;
+            if ($userId) {
+                $favStmt = $db->prepare("SELECT vehicle_id FROM vehicle_favorites WHERE user_id = ?");
+                $favStmt->execute([$userId]);
+                $userFavoriteIds = array_map('intval', $favStmt->fetchAll(PDO::FETCH_COLUMN));
+            }
             
             $result = [];
             foreach ($cars as $car) {
@@ -299,33 +358,20 @@ class ListingController extends Controller {
                     $imageSrc = "https://images.unsplash.com/{$imgUrl}?w=600&q=80";
                 }
                 
-                // Determine city key for UI translation helper
-                $city = strtolower(explode(',', $car['location'])[0]);
-                if (strpos($city, 'tokyo') !== false) {
-                    $cityKey = 'tokyo';
-                } elseif (strpos($city, 'osaka') !== false) {
-                    $cityKey = 'osaka';
-                } elseif (strpos($city, 'yokohama') !== false) {
-                    $cityKey = 'yokohama';
-                } elseif (strpos($city, 'nagoya') !== false) {
-                    $cityKey = 'nagoya';
-                } elseif (strpos($city, 'kobe') !== false) {
-                    $cityKey = 'kobe';
-                } else {
-                    $cityKey = 'kobe';
-                }
-                
                 $result[] = [
                     'id' => (int)$car['id'],
                     'stockId' => $car['stock_id'],
                     'make' => $car['make'],
                     'model' => $car['model'],
+                    'modelDisplay' => VehicleDisplay::modelWithGrade($car['model'], $car['car_grade'] ?? ''),
+                    'carGrade' => trim((string) ($car['car_grade'] ?? '')),
                     'year' => (int)$car['year'],
                     'priceUsd' => (float)$car['fob_price'],
                     'mileageK' => (float)($car['mileage_km'] / 1000),
-                    'cityKey' => $cityKey,
+                    'location' => VehicleDisplay::location($car['location'] ?? ''),
                     'image' => $imageSrc,
-                    'alt' => $car['make'] . ' ' . $car['model']
+                    'alt' => $car['make'] . ' ' . VehicleDisplay::modelWithGrade($car['model'], $car['car_grade'] ?? ''),
+                    'isFavorited' => in_array((int)$car['id'], $userFavoriteIds, true)
                 ];
             }
             
@@ -338,10 +384,11 @@ class ListingController extends Controller {
             ]);
             
         } catch (\Exception $e) {
+            error_log('Listing API error: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode([
                 'error' => true,
-                'message' => $e->getMessage()
+                'message' => 'Unable to load listings. Please try again later.'
             ]);
         }
     }

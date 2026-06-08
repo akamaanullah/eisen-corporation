@@ -19,6 +19,14 @@ class AuthController extends Controller {
     }
 
     public function login() {
+        try {
+            $this->validateCsrf();
+        } catch (\Exception $e) {
+            Session::setFlash('error', 'CSRF token validation failed. Please try again.');
+            $this->redirect('/admin/login');
+            return;
+        }
+
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
 

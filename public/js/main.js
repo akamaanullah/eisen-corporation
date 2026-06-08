@@ -125,6 +125,52 @@
     });
   }
 
+  /* Recent Listings Slider Carousel */
+  const listSlider = document.querySelector(".listings-slider");
+  const listPrevBtn = document.querySelector(".listings-slider-btn--prev");
+  const listNextBtn = document.querySelector(".listings-slider-btn--next");
+
+  if (listSlider && listPrevBtn && listNextBtn) {
+    const updateButtons = () => {
+      const scrollLeft = listSlider.scrollLeft;
+      const maxScroll = listSlider.scrollWidth - listSlider.clientWidth;
+      
+      listPrevBtn.disabled = scrollLeft <= 2;
+      listNextBtn.disabled = scrollLeft >= maxScroll - 2;
+    };
+
+    const getScrollAmount = () => {
+      const firstItem = listSlider.firstElementChild;
+      if (firstItem) {
+        const style = window.getComputedStyle(listSlider);
+        const gap = parseInt(style.gap) || 24;
+        return firstItem.offsetWidth + gap;
+      }
+      return 300;
+    };
+
+    listPrevBtn.addEventListener("click", () => {
+      listSlider.scrollBy({
+        left: -getScrollAmount(),
+        behavior: "smooth"
+      });
+    });
+
+    listNextBtn.addEventListener("click", () => {
+      listSlider.scrollBy({
+        left: getScrollAmount(),
+        behavior: "smooth"
+      });
+    });
+
+    listSlider.addEventListener("scroll", updateButtons);
+    window.addEventListener("resize", updateButtons);
+    
+    updateButtons();
+    setTimeout(updateButtons, 500);
+    window.addEventListener("load", updateButtons);
+  }
+
   /* Hero slider */
   const slider = document.querySelector("[data-slider]");
   if (!slider) return;
@@ -327,4 +373,43 @@
       window.EisenCurrency.applyCurrency(currencySelect.value);
     });
   }
+})();
+
+/* Manufacturer and model dynamic dependent select boxes */
+(function () {
+  "use strict";
+  document.addEventListener("DOMContentLoaded", () => {
+    const makeSelect = document.getElementById("manufacturer");
+    const modelSelect = document.getElementById("model");
+    if (makeSelect && modelSelect) {
+      makeSelect.addEventListener("change", () => {
+        const selectedMake = makeSelect.value.toLowerCase();
+        // Reset models select
+        modelSelect.innerHTML = '';
+        
+        // Add "All models" option
+        const allOpt = document.createElement("option");
+        allOpt.value = "";
+        allOpt.setAttribute("data-i18n", "filter.allModels");
+        allOpt.textContent = "All models";
+        modelSelect.appendChild(allOpt);
+
+        if (selectedMake && window.EisenMakeToModels && window.EisenMakeToModels[selectedMake]) {
+          window.EisenMakeToModels[selectedMake].forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m.value;
+            opt.setAttribute("data-i18n", "spec.val." + m.value);
+            opt.textContent = m.label;
+            modelSelect.appendChild(opt);
+          });
+        }
+
+        // Re-apply translation
+        const lang = localStorage.getItem("eisen-locale-lang") || "en";
+        if (window.EisenI18n) {
+          window.EisenI18n.apply(lang);
+        }
+      });
+    }
+  });
 })();

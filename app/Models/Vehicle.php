@@ -46,4 +46,17 @@ class Vehicle {
         $stmt = $db->prepare("DELETE FROM vehicle_favorites WHERE user_id = ? AND vehicle_id = ?");
         return $stmt->execute([$userId, $vehicleId]);
     }
+
+    public static function addFavorite($userId, $vehicleId) {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("INSERT IGNORE INTO vehicle_favorites (user_id, vehicle_id) VALUES (?, ?)");
+        return $stmt->execute([$userId, $vehicleId]);
+    }
+
+    public static function isFavorited($userId, $vehicleId) {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("SELECT 1 FROM vehicle_favorites WHERE user_id = ? AND vehicle_id = ? LIMIT 1");
+        $stmt->execute([$userId, $vehicleId]);
+        return (bool)$stmt->fetchColumn();
+    }
 }

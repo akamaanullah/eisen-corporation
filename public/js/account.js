@@ -231,7 +231,60 @@
       button.addEventListener('click', function (event) {
         event.preventDefault();
         event.stopPropagation();
-        removeItem(button.closest('[data-favorite-item]'));
+        
+        var item = button.closest('[data-favorite-item]');
+        if (!item) return;
+
+        var stockId = item.getAttribute('data-stock-id');
+        // Retrieve CSRF token from field inside the form or meta tag
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || '';
+        var baseUrl = window.EisenBaseUrl || '';
+
+        if (!csrfToken) {
+          console.error("CSRF token not found.");
+          return;
+        }
+
+        button.disabled = true;
+
+        var formData = new FormData();
+        formData.append("stock_id", stockId);
+        formData.append("csrf_token", csrfToken);
+
+        fetch(baseUrl + "/account/favorites/remove", {
+          method: "POST",
+          body: formData,
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("HTTP error " + response.status);
+          }
+          return response.json();
+        })
+        .then(function (data) {
+          if (data && data.status === "success") {
+            removeItem(item);
+            if (window.toastr) {
+              toastr.success("Removed from favorites.", "Favorites");
+            }
+          } else {
+            if (window.toastr && data && data.message) {
+              toastr.error(data.message, "Error");
+            }
+          }
+        })
+        .catch(function (error) {
+          console.error("Error removing favorite:", error);
+          if (window.toastr) {
+            toastr.error("An error occurred. Please try again.", "Error");
+          }
+        })
+        .finally(function () {
+          button.disabled = false;
+        });
       });
     });
 

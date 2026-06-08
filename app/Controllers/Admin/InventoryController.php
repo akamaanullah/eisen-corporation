@@ -3,6 +3,8 @@ namespace App\Controllers\Admin;
 
 use App\Core\Database;
 use App\Core\Session;
+use App\Helpers\ExchangeRate;
+use App\Helpers\VehicleDisplay;
 use PDO;
 
 class InventoryController extends AdminController {
@@ -28,7 +30,7 @@ class InventoryController extends AdminController {
                 'id' => $car['stock_id'],
                 'type' => $car['type'],
                 'make' => $car['make'],
-                'model' => $car['model'],
+                'model' => VehicleDisplay::modelWithGrade($car['model'], $car['car_grade'] ?? ''),
                 'year' => $car['year'],
                 'chassis' => $car['chassis_number'],
                 'price' => (float)$car['fob_price'],
@@ -84,10 +86,16 @@ class InventoryController extends AdminController {
             $optionGroups = [];
         }
 
+        $catalog = $this->getMakeModelCatalog();
+
         $this->view('admin/inventory-new', [
             'pageTitle' => 'Add New Vehicle | Eisen Admin',
             'pageScript' => 'inventory-new.js',
-            'optionGroups' => $optionGroups
+            'optionGroups' => $optionGroups,
+            'makes' => $catalog['makes'],
+            'makeToModels' => $catalog['makeToModels'],
+            'selectedMake' => '',
+            'selectedModel' => '',
         ]);
     }
 
@@ -100,70 +108,52 @@ class InventoryController extends AdminController {
             return;
         }
 
-        // 1. Retrieve and sanitize input fields
-        $make = trim($_POST['make'] ?? '');
-        $model = trim($_POST['model'] ?? '');
-        $year = (int)($_POST['year'] ?? 0);
-        $chassis = trim($_POST['chassis'] ?? '');
-        $grade = trim($_POST['grade'] ?? '');
-        $mileage = (int)($_POST['mileage'] ?? 0);
-        $engine = (int)($_POST['engine'] ?? 0);
-        $transmission = trim($_POST['transmission'] ?? 'AT');
-        $drive = trim($_POST['drive'] ?? '');
-        $steering = trim($_POST['steering'] ?? 'RHD');
-        $fuel = trim($_POST['fuel'] ?? 'PETROL');
-        $body_type = trim($_POST['body_type'] ?? 'Hatchback');
-        $doors = (int)($_POST['doors'] ?? 5);
-        $seats = (int)($_POST['seats'] ?? 5);
-        $stock_type = trim($_POST['stock_type'] ?? 'In-Stock');
-        $location = trim($_POST['location'] ?? 'KOBE, JAPAN');
-        $color = trim($_POST['color'] ?? 'White');
-        $dimension = trim($_POST['dimension'] ?? '0.00m × 0.00m × 0.00m');
-        $m3 = trim($_POST['m3'] ?? '10.167');
-        $views = (int)($_POST['views'] ?? 0);
-        $description = trim($_POST['description'] ?? '');
-        if ($description === '') {
-            $description = null;
+        // 1. Retrieve and validate input fields
+        $input = $this->applyInventoryDefaults($this->parseInventoryPost());
+        extract($input);
+
+        $description = $description === '' ? null : $description;
+
+        if (!in_array($status, ['Available', 'Reserved', 'Sold', 'Archived'], true)) {
+            $status = 'Available';
         }
 
-        $pricing_currency = trim($_POST['pricing_currency_selector'] ?? 'USD');
-        $exchange_rate = (float)($_POST['exchange_rate'] ?? 150.0);
-        if ($exchange_rate <= 0.0) {
-            $exchange_rate = 150.0;
-        }
-        $price_vehicle = (float)($_POST['price_vehicle'] ?? 0);
-        $price_jpy = (float)($_POST['price_jpy'] ?? 0);
-        $price_freight = (float)($_POST['price_freight'] ?? 0);
-        $price_vanning = (float)($_POST['price_vanning'] ?? 0);
-        $price_inspection = (float)($_POST['price_inspection'] ?? 0);
-        $price_insurance = (float)($_POST['price_insurance'] ?? 0);
-
-        if ($pricing_currency === 'JPY') {
-            $price_vehicle = round($price_vehicle / $exchange_rate, 4);
-            $price_freight = round($price_freight / $exchange_rate, 4);
-            $price_vanning = round($price_vanning / $exchange_rate, 4);
-            $price_inspection = round($price_inspection / $exchange_rate, 4);
-            $price_insurance = round($price_insurance / $exchange_rate, 4);
-        }
-
-        // Calculate total C&F Price
-        $cf_price = $price_vehicle + $price_freight + $price_vanning + $price_inspection + $price_insurance;
-
-        // Basic validation
-        if ($make === '' || $model === '' || $year === 0 || $chassis === '' || $grade === '' || $price_vehicle === 0.0 || $price_jpy === 0.0) {
-            Session::setFlash('error', 'Please fill in all required specifications, vehicle price and JPY price.');
+        $validationError = $this->validateInventoryInput($input);
+        if ($validationError !== null) {
+            Session::setFlash('error', $validationError);
             $this->redirect('/admin/inventory/new');
             return;
         }
 
+        if ($make === '' || $model === '' || $year === 0 || $chassis === '') {
+            Session::setFlash('error', 'Please fill in all required specifications.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
+
+        $price_jpy = (float) ($input['price_jpy'] ?? 0);
+
+        // Calculate total C&F Price (USD stored; entered as JPY in admin)
+        $cf_price = $price_vehicle + $price_freight + $price_vanning + $price_inspection + $price_insurance;
+
         // Length validation checks
-        if (mb_strlen($make) > 50 || mb_strlen($model) > 50 || mb_strlen($chassis) > 50 || mb_strlen($grade) > 50 || mb_strlen($color) > 50 || mb_strlen($dimension) > 50) {
-            Session::setFlash('error', 'Fields make, model, chassis, grade, color, and dimension must not exceed 50 characters.');
+        if (mb_strlen($make) > 50 || mb_strlen($model) > 50 || mb_strlen($chassis) > 50 || mb_strlen($grade) > 50 || mb_strlen($input['car_grade']) > 30 || mb_strlen($color) > 50 || mb_strlen($dimension) > 50) {
+            Session::setFlash('error', 'Fields make, model, chassis, grade, car grade, color, and dimension exceed allowed length.');
             $this->redirect('/admin/inventory/new');
             return;
         }
         if (mb_strlen($location) > 100) {
             Session::setFlash('error', 'Location must not exceed 100 characters.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
+        if (mb_strlen($auction_house) > 100) {
+            Session::setFlash('error', 'Auction house name must not exceed 100 characters.');
+            $this->redirect('/admin/inventory/new');
+            return;
+        }
+        if (mb_strlen($lot_number) > 50) {
+            Session::setFlash('error', 'Lot number must not exceed 50 characters.');
             $this->redirect('/admin/inventory/new');
             return;
         }
@@ -180,15 +170,6 @@ class InventoryController extends AdminController {
 
         try {
             $db = Database::getConnection();
-
-            // Check if chassis number already exists
-            $chCheck = $db->prepare("SELECT id FROM vehicles WHERE chassis_number = ? LIMIT 1");
-            $chCheck->execute([$chassis]);
-            if ($chCheck->fetch()) {
-                Session::setFlash('error', "The chassis number '{$chassis}' is already assigned to another vehicle.");
-                $this->redirect('/admin/inventory/new');
-                return;
-            }
 
             $db->beginTransaction();
 
@@ -246,25 +227,28 @@ class InventoryController extends AdminController {
             // 4. Insert vehicle record
             $stmt = $db->prepare("
                 INSERT INTO vehicles (
-                    stock_id, type, make, model, year, chassis_number, grade, mileage_km, engine_cc, transmission, 
+                    stock_id, type, auction_house, lot_number, make, model, year, chassis_number, grade, car_grade, mileage_km, engine_cc, transmission, 
                     steering, fuel, doors, seats, location, color, body_type, drive_type, 
                     fob_price, freight_price, vanning_price, inspection_price, insurance_price, cf_price, 
                     damage_report_url, status, featured, arrival_date, dimension, m3, description, views, price_jpy
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                     ?, ?, ?, ?, ?, ?, ?, ?, 
                     ?, ?, ?, ?, ?, ?, 
-                    ?, 'Available', 0, NULL, ?, ?, ?, ?, ?
+                    ?, ?, 0, NULL, ?, ?, ?, ?, ?
                 )
             ");
             $stmt->execute([
                 $stock_id,
                 $stock_type,
+                $auction_house,
+                $lot_number,
                 $make,
                 $model,
                 $year,
                 $chassis,
                 $grade,
+                $car_grade,
                 $mileage,
                 $engine,
                 $transmission,
@@ -283,6 +267,7 @@ class InventoryController extends AdminController {
                 $price_insurance,
                 $cf_price,
                 $damage_report_url,
+                $status,
                 $dimension,
                 $m3,
                 $description,
@@ -328,15 +313,28 @@ class InventoryController extends AdminController {
                         $fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 
                         $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-                        if (in_array($fileExtension, $allowedExtensions)) {
-                            $newFileName = 'img_' . $stock_id . '_' . $i . '_' . time() . '.' . $fileExtension;
-                            $dest_path = $uploadFileDir . $newFileName;
+                        if (!in_array($fileExtension, $allowedExtensions, true)) {
+                            continue;
+                        }
 
-                            if (move_uploaded_file($fileTmpPath, $dest_path)) {
-                                $image_url = '/public/uploads/vehicles/' . $newFileName;
-                                $imageStmt->execute([$vehicle_id, $image_url, $sort_order]);
-                                $sort_order++;
-                            }
+                        try {
+                            \App\Helpers\UploadValidator::validateImageUpload([
+                                'error' => UPLOAD_ERR_OK,
+                                'size' => $_FILES['images']['size'][$i],
+                                'name' => $fileName,
+                                'tmp_name' => $fileTmpPath,
+                            ]);
+                        } catch (\InvalidArgumentException $e) {
+                            continue;
+                        }
+
+                        $newFileName = 'img_' . $stock_id . '_' . $i . '_' . time() . '.' . $fileExtension;
+                        $dest_path = $uploadFileDir . $newFileName;
+
+                        if (move_uploaded_file($fileTmpPath, $dest_path)) {
+                            $image_url = '/public/uploads/vehicles/' . $newFileName;
+                            $imageStmt->execute([$vehicle_id, $image_url, $sort_order]);
+                            $sort_order++;
                         }
                     }
                 }
@@ -507,12 +505,18 @@ class InventoryController extends AdminController {
             return;
         }
 
+        $catalog = $this->getMakeModelCatalog();
+
         $this->view('admin/inventory-edit', [
             'pageTitle' => 'Edit Vehicle Listing | Eisen Admin',
             'pageScript' => 'inventory-new.js',
             'car' => $car,
             'optionGroups' => $optionGroups,
-            'existingImages' => $existingImages
+            'existingImages' => $existingImages,
+            'makes' => $catalog['makes'],
+            'makeToModels' => $catalog['makeToModels'],
+            'selectedMake' => $car['make'],
+            'selectedModel' => $car['model'],
         ]);
     }
 
@@ -539,69 +543,52 @@ class InventoryController extends AdminController {
                 return;
             }
 
-            // 2. Retrieve and sanitize input fields
-            $make = trim($_POST['make'] ?? '');
-            $model = trim($_POST['model'] ?? '');
-            $year = (int)($_POST['year'] ?? 0);
-            $chassis = trim($_POST['chassis'] ?? '');
-            $grade = trim($_POST['grade'] ?? '');
-            $mileage = (int)($_POST['mileage'] ?? 0);
-            $engine = (int)($_POST['engine'] ?? 0);
-            $transmission = trim($_POST['transmission'] ?? 'AT');
-            $drive = trim($_POST['drive'] ?? '');
-            $steering = trim($_POST['steering'] ?? 'RHD');
-            $fuel = trim($_POST['fuel'] ?? 'PETROL');
-            $body_type = trim($_POST['body_type'] ?? 'Hatchback');
-            $doors = (int)($_POST['doors'] ?? 5);
-            $seats = (int)($_POST['seats'] ?? 5);
-            $stock_type = trim($_POST['stock_type'] ?? 'In-Stock');
-            $location = trim($_POST['location'] ?? 'KOBE, JAPAN');
-            $color = trim($_POST['color'] ?? 'White');
-            $dimension = trim($_POST['dimension'] ?? '0.00m × 0.00m × 0.00m');
-            $m3 = trim($_POST['m3'] ?? '10.167');
-            $views = (int)($_POST['views'] ?? 0);
-            $description = trim($_POST['description'] ?? '');
-            if ($description === '') {
-                $description = null;
+            // 2. Retrieve and validate input fields
+            $input = $this->applyInventoryDefaults($this->parseInventoryPost());
+            extract($input);
+
+            $description = $description === '' ? null : $description;
+
+            if (!in_array($status, ['Available', 'Reserved', 'Sold', 'Archived'], true)) {
+                $status = 'Available';
             }
 
-            $pricing_currency = trim($_POST['pricing_currency_selector'] ?? 'USD');
-            $exchange_rate = (float)($_POST['exchange_rate'] ?? 150.0);
-            if ($exchange_rate <= 0.0) {
-                $exchange_rate = 150.0;
-            }
-            $price_vehicle = (float)($_POST['price_vehicle'] ?? 0);
-            $price_jpy = (float)($_POST['price_jpy'] ?? 0);
-            $price_freight = (float)($_POST['price_freight'] ?? 0);
-            $price_vanning = (float)($_POST['price_vanning'] ?? 0);
-            $price_inspection = (float)($_POST['price_inspection'] ?? 0);
-            $price_insurance = (float)($_POST['price_insurance'] ?? 0);
-
-            if ($pricing_currency === 'JPY') {
-                $price_vehicle = round($price_vehicle / $exchange_rate, 4);
-                $price_freight = round($price_freight / $exchange_rate, 4);
-                $price_vanning = round($price_vanning / $exchange_rate, 4);
-                $price_inspection = round($price_inspection / $exchange_rate, 4);
-                $price_insurance = round($price_insurance / $exchange_rate, 4);
-            }
-
-            // Calculate total C&F Price
-            $cf_price = $price_vehicle + $price_freight + $price_vanning + $price_inspection + $price_insurance;
-
-            if ($make === '' || $model === '' || $year === 0 || $chassis === '' || $grade === '' || $price_vehicle === 0.0 || $price_jpy === 0.0) {
-                Session::setFlash('error', 'Please fill in all required specifications, vehicle price and JPY price.');
+            $validationError = $this->validateInventoryInput($input);
+            if ($validationError !== null) {
+                Session::setFlash('error', $validationError);
                 $this->redirect('/admin/inventory/edit/' . $id);
                 return;
             }
 
+            if ($make === '' || $model === '' || $year === 0 || $chassis === '') {
+                Session::setFlash('error', 'Please fill in all required specifications.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+
+            $price_jpy = (float) ($input['price_jpy'] ?? 0);
+
+            // Calculate total C&F Price (USD stored; entered as JPY in admin)
+            $cf_price = $price_vehicle + $price_freight + $price_vanning + $price_inspection + $price_insurance;
+
             // Length validation checks
-            if (mb_strlen($make) > 50 || mb_strlen($model) > 50 || mb_strlen($chassis) > 50 || mb_strlen($grade) > 50 || mb_strlen($color) > 50 || mb_strlen($dimension) > 50) {
-                Session::setFlash('error', 'Fields make, model, chassis, grade, color, and dimension must not exceed 50 characters.');
+            if (mb_strlen($make) > 50 || mb_strlen($model) > 50 || mb_strlen($chassis) > 50 || mb_strlen($grade) > 50 || mb_strlen($car_grade) > 30 || mb_strlen($color) > 50 || mb_strlen($dimension) > 50) {
+                Session::setFlash('error', 'Fields make, model, chassis, grade, car grade, color, and dimension exceed allowed length.');
                 $this->redirect('/admin/inventory/edit/' . $id);
                 return;
             }
             if (mb_strlen($location) > 100) {
                 Session::setFlash('error', 'Location must not exceed 100 characters.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+            if (mb_strlen($auction_house) > 100) {
+                Session::setFlash('error', 'Auction house name must not exceed 100 characters.');
+                $this->redirect('/admin/inventory/edit/' . $id);
+                return;
+            }
+            if (mb_strlen($lot_number) > 50) {
+                Session::setFlash('error', 'Lot number must not exceed 50 characters.');
                 $this->redirect('/admin/inventory/edit/' . $id);
                 return;
             }
@@ -612,15 +599,6 @@ class InventoryController extends AdminController {
             }
             if ($description && mb_strlen($description) > 1000) {
                 Session::setFlash('error', 'Description must not exceed 1000 characters.');
-                $this->redirect('/admin/inventory/edit/' . $id);
-                return;
-            }
-
-            // Check if chassis number already exists for another vehicle
-            $chCheck = $db->prepare("SELECT id FROM vehicles WHERE chassis_number = ? AND id != ? LIMIT 1");
-            $chCheck->execute([$chassis, $id]);
-            if ($chCheck->fetch()) {
-                Session::setFlash('error', "The chassis number '{$chassis}' is already assigned to another vehicle.");
                 $this->redirect('/admin/inventory/edit/' . $id);
                 return;
             }
@@ -667,20 +645,23 @@ class InventoryController extends AdminController {
             // 4. Update vehicle record
             $stmt = $db->prepare("
                 UPDATE vehicles SET
-                    type = ?, make = ?, model = ?, year = ?, chassis_number = ?, grade = ?, 
+                    type = ?, auction_house = ?, lot_number = ?, make = ?, model = ?, year = ?, chassis_number = ?, grade = ?, car_grade = ?,
                     mileage_km = ?, engine_cc = ?, transmission = ?, steering = ?, fuel = ?, 
                     doors = ?, seats = ?, location = ?, color = ?, body_type = ?, drive_type = ?, 
                     fob_price = ?, freight_price = ?, vanning_price = ?, inspection_price = ?, 
-                    insurance_price = ?, cf_price = ?, damage_report_url = ?, dimension = ?, m3 = ?, description = ?, views = ?, price_jpy = ?
+                    insurance_price = ?, cf_price = ?, damage_report_url = ?, status = ?, dimension = ?, m3 = ?, description = ?, views = ?, price_jpy = ?
                 WHERE id = ?
             ");
             $stmt->execute([
                 $stock_type,
+                $auction_house,
+                $lot_number,
                 $make,
                 $model,
                 $year,
                 $chassis,
                 $grade,
+                $car_grade,
                 $mileage,
                 $engine,
                 $transmission,
@@ -699,6 +680,7 @@ class InventoryController extends AdminController {
                 $price_insurance,
                 $cf_price,
                 $damage_report_url,
+                $status,
                 $dimension,
                 $m3,
                 $description,
@@ -842,23 +824,18 @@ class InventoryController extends AdminController {
                 throw new \Exception("Could not generate a unique Stock ID after multiple attempts.");
             }
 
-            // 3. Generate new unique chassis number
-            $newChassis = $car['chassis_number'] . '-DUP' . random_int(10, 99);
-            $chassisCheck = $db->prepare("SELECT id FROM vehicles WHERE chassis_number = ? LIMIT 1");
-            $chassisCheck->execute([$newChassis]);
-            if ($chassisCheck->fetch()) {
-                $newChassis = $car['chassis_number'] . '-DUP' . random_int(100, 999);
-            }
+            // 3. Reuse the same chassis number on duplicate
+            $newChassis = $car['chassis_number'];
 
             // 4. Insert duplicated vehicle
             $insertSql = "
                 INSERT INTO vehicles (
-                    stock_id, chassis_number, type, make, model, year, grade, mileage_km, engine_cc,
+                    stock_id, chassis_number, type, auction_house, lot_number, make, model, year, grade, car_grade, mileage_km, engine_cc,
                     transmission, steering, fuel, doors, seats, location, color, body_type, drive_type,
                     fob_price, freight_price, vanning_price, inspection_price, insurance_price, cf_price,
                     damage_report_url, status, featured, arrival_date, dimension, m3, description, views, price_jpy
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     ?, 'Available', 0, ?, ?, ?, ?, 0, ?
@@ -870,10 +847,13 @@ class InventoryController extends AdminController {
                 $newStockId,
                 $newChassis,
                 $car['type'],
+                $car['auction_house'] ?? '',
+                $car['lot_number'] ?? '',
                 $car['make'],
                 $car['model'],
                 $car['year'],
                 $car['grade'],
+                $car['car_grade'] ?? '',
                 $car['mileage_km'],
                 $car['engine_cc'],
                 $car['transmission'],
@@ -984,5 +964,185 @@ class InventoryController extends AdminController {
             'status' => 'info',
             'message' => 'Japan Auction Feed Sync API integration is currently under development. Coming soon!'
         ]);
+    }
+
+    private function getMakeModelCatalog(): array
+    {
+        try {
+            $db = Database::getConnection();
+            $makes = $db->query(
+                'SELECT DISTINCT make FROM master_makes_models ORDER BY make ASC'
+            )->fetchAll(PDO::FETCH_COLUMN);
+
+            $rows = $db->query(
+                'SELECT make, model FROM master_makes_models ORDER BY make ASC, model ASC'
+            )->fetchAll(PDO::FETCH_ASSOC);
+
+            $makeToModels = [];
+            foreach ($rows as $row) {
+                $makeToModels[$row['make']][] = $row['model'];
+            }
+
+            return ['makes' => $makes ?: [], 'makeToModels' => $makeToModels];
+        } catch (\Exception $e) {
+            return ['makes' => [], 'makeToModels' => []];
+        }
+    }
+
+    private function isValidMakeModelPair(string $make, string $model): bool
+    {
+        if ($make === '' || $model === '') {
+            return false;
+        }
+
+        try {
+            $db = Database::getConnection();
+            $stmt = $db->prepare(
+                'SELECT 1 FROM master_makes_models WHERE make = ? AND model = ? LIMIT 1'
+            );
+            $stmt->execute([$make, $model]);
+            return (bool) $stmt->fetchColumn();
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     */
+    private function validateInventoryInput(array $input): ?string
+    {
+        if (!$this->isValidMakeModelPair($input['make'], $input['model'])) {
+            return 'Please select a valid make and model from the master catalog.';
+        }
+
+        if (!in_array($input['transmission'], ['AT', 'MT'], true)) {
+            return 'Invalid transmission value.';
+        }
+
+        if (!in_array($input['steering'], ['RHD', 'LHD'], true)) {
+            return 'Invalid steering value.';
+        }
+
+        if (!in_array($input['fuel'], ['PETROL', 'DIESEL', 'HYBRID', 'ELECTRIC'], true)) {
+            return 'Invalid fuel type.';
+        }
+
+        if (!in_array($input['stock_type'], ['In-Stock', 'Auction'], true)) {
+            return 'Invalid listing sourcing type.';
+        }
+
+        $currentYear = (int) date('Y');
+        if ($input['year'] < 1980 || $input['year'] > $currentYear + 1) {
+            return 'Model year is out of allowed range.';
+        }
+
+        if ($input['chassis'] === '') {
+            return 'Chassis number is required.';
+        }
+
+        if ($input['mileage'] < 0 || $input['engine'] < 0) {
+            return 'Mileage and engine size cannot be negative.';
+        }
+
+        if ($input['doors'] !== 0 && ($input['doors'] < 2 || $input['doors'] > 9)) {
+            return 'Doors count is out of allowed range.';
+        }
+
+        if ($input['seats'] !== 0 && ($input['seats'] < 1 || $input['seats'] > 20)) {
+            return 'Seats count is out of allowed range.';
+        }
+
+        if ($input['price_vehicle'] <= 0) {
+            return 'Base vehicle price (JPY) must be greater than zero.';
+        }
+
+        foreach (['price_freight', 'price_vanning', 'price_inspection', 'price_insurance'] as $key) {
+            if ($input[$key] < 0) {
+                return 'Pricing components cannot be negative.';
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    private function applyInventoryDefaults(array $input): array
+    {
+        if ($input['grade'] === '') {
+            $input['grade'] = '-';
+        }
+        if ($input['drive'] === '') {
+            $input['drive'] = 'N/A';
+        }
+        if ($input['location'] === '') {
+            $input['location'] = '-';
+        }
+        if ($input['color'] === '') {
+            $input['color'] = '-';
+        }
+        if ($input['dimension'] === '') {
+            $input['dimension'] = '0.00m × 0.00m × 0.00m';
+        }
+        if ($input['m3'] === '') {
+            $input['m3'] = '10.167';
+        }
+
+        return $input;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function parseInventoryPost(): array
+    {
+        $rate = ExchangeRate::resolveRate($_POST['exchange_rate'] ?? null);
+        $toUsd = static function (float $jpy) use ($rate): float {
+            return $jpy > 0 ? round($jpy / $rate, 2) : 0.0;
+        };
+
+        $priceVehicleJpy = (float) ($_POST['price_vehicle_jpy'] ?? 0);
+        $priceFreightJpy = (float) ($_POST['price_freight_jpy'] ?? 0);
+        $priceVanningJpy = (float) ($_POST['price_vanning_jpy'] ?? 0);
+        $priceInspectionJpy = (float) ($_POST['price_inspection_jpy'] ?? 0);
+        $priceInsuranceJpy = (float) ($_POST['price_insurance_jpy'] ?? 0);
+
+        return [
+            'make' => trim($_POST['make'] ?? ''),
+            'model' => trim($_POST['model'] ?? ''),
+            'year' => (int) ($_POST['year'] ?? 0),
+            'chassis' => trim($_POST['chassis'] ?? ''),
+            'grade' => trim($_POST['grade'] ?? ''),
+            'car_grade' => trim($_POST['car_grade'] ?? ''),
+            'mileage' => (int) ($_POST['mileage'] ?? 0),
+            'engine' => (int) ($_POST['engine'] ?? 0),
+            'transmission' => trim($_POST['transmission'] ?? 'AT'),
+            'drive' => trim($_POST['drive'] ?? ''),
+            'steering' => trim($_POST['steering'] ?? 'RHD'),
+            'fuel' => trim($_POST['fuel'] ?? 'PETROL'),
+            'body_type' => trim($_POST['body_type'] ?? 'Hatchback'),
+            'doors' => (int) ($_POST['doors'] ?? 0),
+            'seats' => (int) ($_POST['seats'] ?? 0),
+            'stock_type' => trim($_POST['stock_type'] ?? 'In-Stock'),
+            'auction_house' => trim($_POST['auction_house'] ?? ''),
+            'lot_number' => trim($_POST['lot_number'] ?? ''),
+            'location' => trim($_POST['location'] ?? ''),
+            'color' => trim($_POST['color'] ?? ''),
+            'dimension' => trim($_POST['dimension'] ?? ''),
+            'm3' => trim($_POST['m3'] ?? ''),
+            'views' => max(0, (int) ($_POST['views'] ?? 0)),
+            'description' => trim($_POST['description'] ?? ''),
+            'status' => trim($_POST['status'] ?? 'Available'),
+            'exchange_rate' => $rate,
+            'price_jpy' => $priceVehicleJpy,
+            'price_vehicle' => $toUsd($priceVehicleJpy),
+            'price_freight' => $toUsd($priceFreightJpy),
+            'price_vanning' => $toUsd($priceVanningJpy),
+            'price_inspection' => $toUsd($priceInspectionJpy),
+            'price_insurance' => $toUsd($priceInsuranceJpy),
+        ];
     }
 }

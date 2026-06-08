@@ -23,6 +23,11 @@ define('ROOT_DIR', dirname(__DIR__));
 define('APP_DIR', ROOT_DIR . '/app');
 define('VIEW_DIR', ROOT_DIR . '/views');
 
+// Application environment: development | production
+if (!defined('APP_ENV')) {
+    define('APP_ENV', 'development');
+}
+
 // Load local configurations / secrets if they exist
 if (file_exists(__DIR__ . '/config_local.php')) {
     require_once __DIR__ . '/config_local.php';

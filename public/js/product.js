@@ -145,17 +145,28 @@
   function applyVehiclePrices() {
     if (!window.EisenCurrency) return;
     const cells = [
-      ...document.querySelectorAll(".product-vehicle-price[data-price-jpy]"),
-      ...document.querySelectorAll("[data-estimate-price-jpy]"),
+      ...document.querySelectorAll(".product-vehicle-price"),
+      ...document.querySelectorAll("[data-estimate-price-usd]"),
     ];
     if (!cells.length) return;
     const currency =
       calcCurrency?.value ||
       (window.EisenCurrency.getCurrency() === "jpy" ? "jpy" : "usd");
     cells.forEach((cell) => {
-      const jpy = Number(cell.dataset.priceJpy ?? cell.dataset.estimatePriceJpy);
-      if (!Number.isFinite(jpy)) return;
-      cell.textContent = window.EisenCurrency.formatFromJpy(jpy, currency);
+      // Prefer data-price-usd (set by calculateTotal or template)
+      const usdAttr = cell.dataset.priceUsd ?? cell.dataset.estimatePriceUsd;
+      if (usdAttr !== undefined) {
+        const usd = Number(usdAttr);
+        if (Number.isFinite(usd)) {
+          cell.textContent = window.EisenCurrency.formatPrice(usd, currency);
+        }
+      } else if (cell.dataset.priceJpy !== undefined) {
+        // Legacy fallback: JPY stored directly (e.g. shipping table rows)
+        const jpy = Number(cell.dataset.priceJpy);
+        if (Number.isFinite(jpy)) {
+          cell.textContent = window.EisenCurrency.formatFromJpy(jpy, currency);
+        }
+      }
     });
   }
 
@@ -193,13 +204,19 @@
 
     // Map location (remove ", JAPAN" for cleaner Ja text)
     let locText = data.location || "";
-    if (isJa) {
+    if (locText === "N/A") {
+      locText = isJa ? "未登録" : "not listed";
+    } else if (isJa) {
       locText = locText.replace(", JAPAN", "").trim();
     }
 
     // Format mileage
-    const formattedMileage = Number(data.mileageKm || 0).toLocaleString();
-    const formattedEngine = Number(data.engineCc || 0).toLocaleString();
+    const formattedMileage = Number(data.mileageKm || 0) > 0
+      ? Number(data.mileageKm).toLocaleString()
+      : "N/A";
+    const formattedEngine = Number(data.engineCc || 0) > 0
+      ? Number(data.engineCc).toLocaleString()
+      : "N/A";
 
     // Map body type
     let bodyText = data.bodyType || "";
@@ -231,9 +248,13 @@
     const p2El = document.querySelector("[data-dynamic-desc='p2']");
     if (p2El) {
       if (isJa) {
-        p2El.textContent = `${data.title}は優れた燃費効率、コンパクトなサイズ、そして多目的に使えるキャビンで知られています。この車両の走行距離は${formattedMileage} kmで、排気量${formattedEngine} ccの${fuelText}エンジンとスムーズな${transText}を搭載しており、日常の使用や海外市場での再販に最適です。`;
+        p2El.textContent = formattedMileage === "N/A" || formattedEngine === "N/A"
+          ? `${data.title}は優れた燃費効率、コンパクトなサイズ、そして多目的に使えるキャビンで知られています。走行距離または排気量の詳細は未登録ですが、${fuelText}エンジンと${transText}を搭載しており、日常の使用や海外市場での再販に最適です。`
+          : `${data.title}は優れた燃費効率、コンパクトなサイズ、そして多目的に使えるキャビンで知られています。この車両の走行距離は${formattedMileage} kmで、排気量${formattedEngine} ccの${fuelText}エンジンとスムーズな${transText}を搭載しており、日常の使用や海外市場での再販に最適です。`;
       } else {
-        p2El.textContent = `The ${data.title} is known for excellent fuel economy, a compact footprint, and a versatile cabin. This example shows ${formattedMileage} km on the odometer with a ${formattedEngine} cc ${fuelText} engine and smooth ${transText} transmission — well suited for daily use or resale in overseas markets.`;
+        p2El.textContent = formattedMileage === "N/A" || formattedEngine === "N/A"
+          ? `The ${data.title} is known for excellent fuel economy, a compact footprint, and a versatile cabin. Mileage or engine details are not listed; it has a ${fuelText} engine with ${transText} transmission — well suited for daily use or resale in overseas markets.`
+          : `The ${data.title} is known for excellent fuel economy, a compact footprint, and a versatile cabin. This example shows ${formattedMileage} km on the odometer with a ${formattedEngine} cc ${fuelText} engine and smooth ${transText} transmission — well suited for daily use or resale in overseas markets.`;
       }
     }
 
@@ -256,18 +277,19 @@
     const inspectionRadio = document.querySelector("input[name='inspection']:checked")?.value;
     const insuranceRadio = document.querySelector("input[name='insurance']:checked")?.value;
 
-    let totalJpy = pricing.vehicle + pricing.vanning;
+    // Accumulate in USD — currency.js converts to JPY live using the real exchange rate
+    let totalUsd = pricing.vehicle + pricing.vanning;
 
     if (freightRadio === "prepaid") {
-      totalJpy += pricing.freight;
+      totalUsd += pricing.freight;
     }
     if (inspectionRadio === "yes") {
-      totalJpy += pricing.inspection;
+      totalUsd += pricing.inspection;
     }
     if (insuranceRadio === "yes") {
-      totalJpy += pricing.insurance;
+      totalUsd += pricing.insurance;
     }
-    totalJpy += pricing.coupon;
+    totalUsd += pricing.coupon;
 
     const totalRow = document.querySelector(".product-estimate__total-row");
     if (totalRow) {
@@ -280,8 +302,10 @@
         valEl.className = "product-estimate__total-value product-vehicle-price";
         totalRow.appendChild(valEl);
       }
-      
-      valEl.dataset.priceJpy = totalJpy;
+
+      // Use USD data attribute so applyVehiclePrices() applies live conversion
+      valEl.dataset.priceUsd = totalUsd;
+      delete valEl.dataset.priceJpy;  // Remove stale JPY if previously set
       applyVehiclePrices();
     }
   }
@@ -291,7 +315,12 @@
   }
 
   if (window.EisenCurrency) {
-    window.EisenCurrency.ready.then(applyVehiclePrices);
+    window.EisenCurrency.ready.then(() => {
+      if (calcCurrency) {
+        calcCurrency.value = window.EisenCurrency.getCurrency();
+      }
+      applyVehiclePrices();
+    });
     document.addEventListener("eisen:currency-change", () => {
       if (calcCurrency) {
         calcCurrency.value = window.EisenCurrency.getCurrency();
@@ -312,5 +341,108 @@
   if (estimateForm) {
     estimateForm.addEventListener("change", calculateTotal);
     calculateTotal();
+  }
+
+  // ==========================================
+  // Favorites Toggle Interaction
+  // ==========================================
+  const favBtn = document.querySelector("[data-favorite-toggle]");
+  if (favBtn) {
+    favBtn.addEventListener("click", function (event) {
+      event.preventDefault();
+      
+      const vehicleId = favBtn.getAttribute("data-vehicle-id");
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content");
+      const baseUrl = window.EisenBaseUrl || "";
+
+      if (!csrfToken) {
+        console.error("CSRF token not found.");
+        return;
+      }
+
+      favBtn.disabled = true;
+
+      const formData = new FormData();
+      formData.append("vehicle_id", vehicleId);
+      formData.append("csrf_token", csrfToken);
+
+      fetch(baseUrl + "/product/favorite/toggle", {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      })
+      .then(response => {
+        if (response.status === 401) {
+          window.location.href = baseUrl + "/login";
+          return;
+        }
+        if (!response.ok) {
+          throw new Error("HTTP error " + response.status);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data && data.status === "success") {
+          const countSpan = favBtn.querySelector("[data-favorite-count]");
+          if (countSpan) {
+            countSpan.textContent = data.count;
+          }
+          if (data.action === "added") {
+            favBtn.classList.add("is-active");
+            if (window.toastr) {
+              toastr.success("Added to favorites!", "Favorites");
+            }
+          } else {
+            favBtn.classList.remove("is-active");
+            if (window.toastr) {
+              toastr.success("Removed from favorites.", "Favorites");
+            }
+          }
+        } else {
+          if (window.toastr && data && data.message) {
+            toastr.error(data.message, "Error");
+          }
+        }
+      })
+      .catch(error => {
+        console.error("Error toggling favorite:", error);
+        if (window.toastr) {
+          toastr.error("An error occurred. Please try again.", "Error");
+        }
+      })
+      .finally(() => {
+        favBtn.disabled = false;
+      });
+    });
+  }
+
+  // Country to Port dynamic filtering in estimator
+  const countrySelect = document.getElementById("estimate-country");
+  const portSelect = document.getElementById("estimate-port");
+  if (countrySelect && portSelect && window.EisenCountryToPorts) {
+    function filterPorts() {
+      const selectedCountry = countrySelect.value.toUpperCase();
+      const ports = window.EisenCountryToPorts[selectedCountry] || [];
+      
+      // Clear existing options
+      portSelect.innerHTML = "";
+      
+      // Re-populate ports
+      ports.forEach(port => {
+        const opt = document.createElement("option");
+        opt.value = port;
+        opt.textContent = port;
+        portSelect.appendChild(opt);
+      });
+      
+      // Trigger estimator total calculation
+      calculateTotal();
+    }
+    
+    countrySelect.addEventListener("change", filterPorts);
+    // Initial run to align ports
+    filterPorts();
   }
 })();
