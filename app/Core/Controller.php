@@ -25,6 +25,9 @@ class Controller {
      */
     protected function view($view, $data = []) {
         $this->sendSecurityHeaders();
+        if (!headers_sent()) {
+            header('Content-Type: text/html; charset=UTF-8');
+        }
         // Extract array keys into variables for the view
         extract($data);
         

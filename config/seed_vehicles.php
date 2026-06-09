@@ -684,7 +684,7 @@ try {
                 'photo-1533473359331-0135ef1b58bf',
                 'photo-1606664515524-ed2f786a0bd6'
             ],
-            'options' => ['Air Conditioner', 'Alloy Wheels', 'LED Light', 'Back Camera', 'Push Start', 'ABS', 'ESC', 'ACC']
+            'options' => ['Air Conditioner', 'Alloy Wheels', 'LED Light', 'Back Camera', 'Push Start', 'ABS', 'ESC', 'AAC']
         ],
         [
             'stock_id' => 'ST-2113',
@@ -1059,7 +1059,7 @@ try {
                 'photo-1618843479313-40f8afb4b4d8',
                 'photo-1555215695-3004980ad54e'
             ],
-            'options' => ['Leather Seat', 'Air Conditioner', 'Navigation System', 'Alloy Wheels', 'LED Light', 'Back Camera', 'Push Start', 'ACC']
+            'options' => ['Leather Seat', 'Air Conditioner', 'Navigation System', 'Alloy Wheels', 'LED Light', 'Back Camera', 'Push Start', 'AAC']
         ]
     ];
     

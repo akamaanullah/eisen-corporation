@@ -262,7 +262,7 @@ $inventoryEngineCc = [660, 800, 1000, 1200, 1300, 1500, 1600, 1800, 2000, 2200, 
 
           <div class="inventory-results">
             <header class="inventory-results__head">
-              <h2 class="inventory-results__title"><span class="inventory-results__total">926</span> <span data-i18n="inventory.results.listings">Listings</span></h2>
+              <h2 class="inventory-results__title"><span class="inventory-results__total"><?= number_format((int) ($totalListings ?? 0)) ?></span> <span data-i18n="inventory.results.listings">Listings</span></h2>
               <div class="inventory-results__actions">
                 <a class="inventory-results__compare" href="#" data-i18n="inventory.compare">Compare</a>
                 <span class="inventory-results__sort">

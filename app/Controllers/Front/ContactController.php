@@ -9,20 +9,12 @@ class ContactController extends Controller
     {
         $channels = [
             [
-                'title' => 'Export desk',
-                'text' => 'Auction sourcing, vehicle inquiries, and shipping quotes.',
-                'email' => 'export@eisen-corp.com',
-                'phone' => '+81 45-000-0000',
-                'titleKey' => 'contact.channel.export.title',
-                'textKey' => 'contact.channel.export.text',
-            ],
-            [
-                'title' => 'Dealer partnerships',
-                'text' => 'Volume sourcing, dealer accounts, and wholesale support.',
-                'email' => 'dealers@eisen-corp.com',
-                'phone' => '+81 45-000-0001',
-                'titleKey' => 'contact.channel.dealer.title',
-                'textKey' => 'contact.channel.dealer.text',
+                'title' => 'Contact us',
+                'text' => 'Vehicle inquiries, export quotes, and general support.',
+                'email' => 'sales@eisenwheels.com',
+                'phone' => '090 3350 8523',
+                'titleKey' => 'contact.channel.sales.title',
+                'textKey' => 'contact.channel.sales.text',
             ],
         ];
 

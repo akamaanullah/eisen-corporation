@@ -80,6 +80,7 @@ $router->get('/admin/login', 'Admin\AuthController@showLoginForm');
 $router->post('/admin/login', 'Admin\AuthController@login');
 $router->get('/admin/logout', 'Admin\AuthController@logout');
 $router->get('/admin/inventory', 'Admin\InventoryController@index');
+$router->get('/admin/inventory/auction-ending', 'Admin\InventoryController@auctionEnding');
 $router->get('/admin/inventory/new', 'Admin\InventoryController@create');
 $router->post('/admin/inventory/new', 'Admin\InventoryController@store');
 $router->get('/admin/inventory/edit/{id}', 'Admin\InventoryController@edit');

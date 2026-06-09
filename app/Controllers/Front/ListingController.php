@@ -5,6 +5,7 @@ use App\Core\Controller;
 use App\Core\Database;
 use App\Core\Session;
 use App\Helpers\VehicleDisplay;
+use App\Helpers\VehicleSpecOptions;
 use PDO;
 
 class ListingController extends Controller {
@@ -27,19 +28,24 @@ class ListingController extends Controller {
             // Fetch unique colors from vehicles
             $colorStmt = $db->query("SELECT DISTINCT color FROM vehicles WHERE color IS NOT NULL AND color != '' ORDER BY color ASC");
             $dbColors = $colorStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $countStmt = $db->query("SELECT COUNT(*) FROM vehicles WHERE status = 'Available'");
+            $totalListings = (int) $countStmt->fetchColumn();
             
         } catch (\Exception $e) {
             $dbMakes = [];
             $dbModels = [];
             $dbFuels = [];
             $dbColors = [];
+            $totalListings = 0;
         }
 
         $this->view('front/listing', [
             'makes' => $dbMakes,
             'models' => $dbModels,
             'fuels' => $dbFuels,
-            'colors' => $dbColors
+            'colors' => $dbColors,
+            'totalListings' => $totalListings,
         ]);
     }
 
@@ -182,7 +188,12 @@ class ListingController extends Controller {
                 }
                 
                 if ($hasOthers) {
-                    $excludeClause = "fuel NOT IN ('PETROL', 'HYBRID', 'ELECTRIC')";
+                    $primaryFuels = VehicleSpecOptions::primaryFuelCodes();
+                    $excludeParts = array_map(
+                        static fn(string $fuel): string => "'" . str_replace("'", "''", $fuel) . "'",
+                        $primaryFuels
+                    );
+                    $excludeClause = 'fuel NOT IN (' . implode(', ', $excludeParts) . ')';
                     if ($clause) {
                         $clause = "({$clause} OR {$excludeClause})";
                     } else {
@@ -200,15 +211,39 @@ class ListingController extends Controller {
                 $trans = explode(',', $_GET['transmission']);
                 $transConds = [];
                 $idx = 0;
+                $manualCodes = VehicleSpecOptions::manualTransmissionCodes();
                 foreach ($trans as $t) {
-                    $t = trim($t);
-                    $paramName = 'trans_' . $idx++;
-                    $dbTrans = (strtolower($t) === 'manual') ? 'MT' : 'AT';
-                    $transConds[] = "transmission = :{$paramName}";
-                    $params[$paramName] = $dbTrans;
+                    $t = trim(strtolower($t));
+                    if ($t === 'manual') {
+                        $manualPlaceholders = [];
+                        foreach ($manualCodes as $code) {
+                            $paramName = 'trans_' . $idx++;
+                            $manualPlaceholders[] = ':' . $paramName;
+                            $params[$paramName] = $code;
+                        }
+                        if (!empty($manualPlaceholders)) {
+                            $transConds[] = 'transmission IN (' . implode(', ', $manualPlaceholders) . ')';
+                        }
+                        continue;
+                    }
+
+                    if ($t === 'auto') {
+                        $autoPlaceholders = [];
+                        foreach (array_keys(VehicleSpecOptions::transmissionOptions()) as $code) {
+                            if (in_array($code, $manualCodes, true)) {
+                                continue;
+                            }
+                            $paramName = 'trans_' . $idx++;
+                            $autoPlaceholders[] = ':' . $paramName;
+                            $params[$paramName] = $code;
+                        }
+                        if (!empty($autoPlaceholders)) {
+                            $transConds[] = 'transmission IN (' . implode(', ', $autoPlaceholders) . ')';
+                        }
+                    }
                 }
                 if (!empty($transConds)) {
-                    $conditions[] = "(" . implode(' OR ', $transConds) . ")";
+                    $conditions[] = '(' . implode(' OR ', $transConds) . ')';
                 }
             }
             

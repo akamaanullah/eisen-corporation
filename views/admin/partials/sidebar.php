@@ -23,9 +23,22 @@ function isPageActive($path) {
             </li>
             
             <li class="nav-item">
-                <a href="<?= BASE_URL ?>/admin/inventory" class="nav-link <?= isPageActive('/admin/inventory') ?>">
+                <a href="<?= BASE_URL ?>/admin/inventory" class="nav-link <?= (isPageActive('/admin/inventory') && !isPageActive('/admin/inventory/auction-ending')) ? 'active' : '' ?>">
                     <i data-lucide="car"></i>
                     <span class="link-label">Inventory</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <?php
+                $auctionEndingCount = (int) ($auctionAlertsTotal ?? \App\Helpers\AdminStats::countAuctionEndingSoon());
+                ?>
+                <a href="<?= BASE_URL ?>/admin/inventory/auction-ending" class="nav-link <?= isPageActive('/admin/inventory/auction-ending') ? 'active' : '' ?>">
+                    <i data-lucide="calendar-clock"></i>
+                    <span class="link-label">Auction Ending Soon</span>
+                    <?php if ($auctionEndingCount > 0): ?>
+                    <span class="nav-count-badge"><?= $auctionEndingCount ?></span>
+                    <?php endif; ?>
                 </a>
             </li>
             

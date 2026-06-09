@@ -798,7 +798,7 @@
 
         // Update counts in header
         const totalCountEl = document.querySelector(".inventory-results__total");
-        if (totalCountEl) totalCountEl.textContent = String(totalListings);
+        if (totalCountEl) totalCountEl.textContent = Number(totalListings).toLocaleString("en-US");
 
         if (listings.length === 0) {
           grid.innerHTML = `

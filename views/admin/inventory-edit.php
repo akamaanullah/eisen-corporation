@@ -232,13 +232,11 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                             <label class="form-label" for="engine">Engine Size (CC)</label>
                             <input class="form-control" type="number" id="engine" name="engine" min="0" value="<?= htmlspecialchars($car['engine_cc']) ?>" placeholder="e.g. 1300">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="transmission">Transmission</label>
-                            <select class="form-control" id="transmission" name="transmission">
-                                <option value="AT" <?= $car['transmission'] === 'AT' ? 'selected' : '' ?>>Automatic (AT)</option>
-                                <option value="MT" <?= $car['transmission'] === 'MT' ? 'selected' : '' ?>>Manual (MT)</option>
-                            </select>
-                        </div>
+                        <?php
+                        $selectedTransmission = $car['transmission'];
+                        $renderSpecFields = ['transmission'];
+                        include __DIR__ . '/partials/inventory-spec-fields.php';
+                        ?>
                         <div class="form-group">
                             <label class="form-label" for="drive">Drive Train</label>
                             <input class="form-control" type="text" id="drive" name="drive" value="<?= htmlspecialchars($car['drive_type']) ?>" placeholder="e.g. 2WD">
@@ -253,24 +251,12 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                                 <option value="LHD" <?= $car['steering'] === 'LHD' ? 'selected' : '' ?>>Left Hand Drive (LHD)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="fuel">Fuel Type</label>
-                            <select class="form-control" id="fuel" name="fuel">
-                                <option value="PETROL" <?= $car['fuel'] === 'PETROL' ? 'selected' : '' ?>>Petrol (Gasoline)</option>
-                                <option value="DIESEL" <?= $car['fuel'] === 'DIESEL' ? 'selected' : '' ?>>Diesel</option>
-                                <option value="HYBRID" <?= $car['fuel'] === 'HYBRID' ? 'selected' : '' ?>>Hybrid</option>
-                                <option value="ELECTRIC" <?= $car['fuel'] === 'ELECTRIC' ? 'selected' : '' ?>>Electric</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="body_type">Body Type</label>
-                            <select class="form-control" id="body_type" name="body_type">
-                                <option value="Hatchback" <?= $car['body_type'] === 'Hatchback' ? 'selected' : '' ?>>Hatchback</option>
-                                <option value="Sedan" <?= $car['body_type'] === 'Sedan' ? 'selected' : '' ?>>Sedan</option>
-                                <option value="SUV" <?= $car['body_type'] === 'SUV' ? 'selected' : '' ?>>SUV</option>
-                                <option value="Van" <?= $car['body_type'] === 'Van' ? 'selected' : '' ?>>Van</option>
-                            </select>
-                        </div>
+                        <?php
+                        $selectedFuel = $car['fuel'];
+                        $selectedBodyType = $car['body_type'];
+                        $renderSpecFields = ['fuel', 'body_type'];
+                        include __DIR__ . '/partials/inventory-spec-fields.php';
+                        ?>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
@@ -295,7 +281,7 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px;">
                         <div class="form-group">
                             <label class="form-label" for="auction_house">Auction House Name</label>
                             <input class="form-control" type="text" id="auction_house" name="auction_house" value="<?= htmlspecialchars($car['auction_house'] ?? '') ?>" placeholder="e.g. USS Tokyo" maxlength="100">
@@ -304,6 +290,11 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                         <div class="form-group">
                             <label class="form-label" for="lot_number">Lot Number</label>
                             <input class="form-control" type="text" id="lot_number" name="lot_number" value="<?= htmlspecialchars($car['lot_number'] ?? '') ?>" placeholder="e.g. A-1234" maxlength="50">
+                            <small style="font-size: 11px; color: var(--color-text-muted);">Admin only — not shown on the website.</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="auction_end_date">Auction End Date</label>
+                            <input class="form-control" type="date" id="auction_end_date" name="auction_end_date" value="<?= htmlspecialchars($car['auction_end_date'] ?? '') ?>">
                             <small style="font-size: 11px; color: var(--color-text-muted);">Admin only — not shown on the website.</small>
                         </div>
                     </div>

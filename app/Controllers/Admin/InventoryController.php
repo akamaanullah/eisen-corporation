@@ -5,6 +5,7 @@ use App\Core\Database;
 use App\Core\Session;
 use App\Helpers\ExchangeRate;
 use App\Helpers\VehicleDisplay;
+use App\Helpers\VehicleSpecOptions;
 use PDO;
 
 class InventoryController extends AdminController {
@@ -36,7 +37,7 @@ class InventoryController extends AdminController {
                 'price' => (float)$car['fob_price'],
                 'grade' => $car['grade'],
                 'mileage' => number_format($car['mileage_km']) . ' km',
-                'transmission' => $car['transmission'] === 'AT' ? 'Auto' : 'Manual',
+                'transmission' => VehicleSpecOptions::transmissionLabel($car['transmission']),
                 'status' => $car['status'],
                 'featured' => (bool)$car['featured'],
                 'image' => $car['image'],
@@ -48,6 +49,30 @@ class InventoryController extends AdminController {
             'pageTitle' => 'Inventory Management | Eisen Admin',
             'pageScript' => 'inventory.js',
             'cars' => $cars
+        ]);
+    }
+
+    public function auctionEnding() {
+        $days = max(1, min(90, (int) ($_GET['days'] ?? \App\Helpers\AdminStats::AUCTION_ALERT_DAYS)));
+        $filter = in_array($_GET['filter'] ?? 'all', ['all', 'overdue', 'today', 'upcoming'], true)
+            ? ($_GET['filter'] ?? 'all')
+            : 'all';
+
+        $pageData = \App\Helpers\AdminStats::getAuctionEndingPageData(
+            $days,
+            \App\Helpers\AdminStats::AUCTION_OVERDUE_DAYS,
+            $filter
+        );
+
+        $this->view('admin/inventory-auction-ending', [
+            'pageTitle' => 'Auction Ending Soon | Eisen Admin',
+            'listings' => $pageData['listings'],
+            'days' => $days,
+            'filter' => $filter,
+            'totalCount' => $pageData['totalCount'],
+            'overdueCount' => $pageData['counts']['overdue'],
+            'todayCount' => $pageData['counts']['today'],
+            'upcomingCount' => $pageData['counts']['upcoming'],
         ]);
     }
 
@@ -227,12 +252,12 @@ class InventoryController extends AdminController {
             // 4. Insert vehicle record
             $stmt = $db->prepare("
                 INSERT INTO vehicles (
-                    stock_id, type, auction_house, lot_number, make, model, year, chassis_number, grade, car_grade, mileage_km, engine_cc, transmission, 
+                    stock_id, type, auction_house, lot_number, auction_end_date, make, model, year, chassis_number, grade, car_grade, mileage_km, engine_cc, transmission, 
                     steering, fuel, doors, seats, location, color, body_type, drive_type, 
                     fob_price, freight_price, vanning_price, inspection_price, insurance_price, cf_price, 
                     damage_report_url, status, featured, arrival_date, dimension, m3, description, views, price_jpy
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                     ?, ?, ?, ?, ?, ?, ?, ?, 
                     ?, ?, ?, ?, ?, ?, 
                     ?, ?, 0, NULL, ?, ?, ?, ?, ?
@@ -243,6 +268,7 @@ class InventoryController extends AdminController {
                 $stock_type,
                 $auction_house,
                 $lot_number,
+                $auction_end_date,
                 $make,
                 $model,
                 $year,
@@ -645,7 +671,7 @@ class InventoryController extends AdminController {
             // 4. Update vehicle record
             $stmt = $db->prepare("
                 UPDATE vehicles SET
-                    type = ?, auction_house = ?, lot_number = ?, make = ?, model = ?, year = ?, chassis_number = ?, grade = ?, car_grade = ?,
+                    type = ?, auction_house = ?, lot_number = ?, auction_end_date = ?, make = ?, model = ?, year = ?, chassis_number = ?, grade = ?, car_grade = ?,
                     mileage_km = ?, engine_cc = ?, transmission = ?, steering = ?, fuel = ?, 
                     doors = ?, seats = ?, location = ?, color = ?, body_type = ?, drive_type = ?, 
                     fob_price = ?, freight_price = ?, vanning_price = ?, inspection_price = ?, 
@@ -656,6 +682,7 @@ class InventoryController extends AdminController {
                 $stock_type,
                 $auction_house,
                 $lot_number,
+                $auction_end_date,
                 $make,
                 $model,
                 $year,
@@ -830,12 +857,12 @@ class InventoryController extends AdminController {
             // 4. Insert duplicated vehicle
             $insertSql = "
                 INSERT INTO vehicles (
-                    stock_id, chassis_number, type, auction_house, lot_number, make, model, year, grade, car_grade, mileage_km, engine_cc,
+                    stock_id, chassis_number, type, auction_house, lot_number, auction_end_date, make, model, year, grade, car_grade, mileage_km, engine_cc,
                     transmission, steering, fuel, doors, seats, location, color, body_type, drive_type,
                     fob_price, freight_price, vanning_price, inspection_price, insurance_price, cf_price,
                     damage_report_url, status, featured, arrival_date, dimension, m3, description, views, price_jpy
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     ?, 'Available', 0, ?, ?, ?, ?, 0, ?
@@ -849,6 +876,7 @@ class InventoryController extends AdminController {
                 $car['type'],
                 $car['auction_house'] ?? '',
                 $car['lot_number'] ?? '',
+                $car['auction_end_date'] ?? null,
                 $car['make'],
                 $car['model'],
                 $car['year'],
@@ -1016,7 +1044,7 @@ class InventoryController extends AdminController {
             return 'Please select a valid make and model from the master catalog.';
         }
 
-        if (!in_array($input['transmission'], ['AT', 'MT'], true)) {
+        if (!VehicleSpecOptions::isValidTransmission($input['transmission'])) {
             return 'Invalid transmission value.';
         }
 
@@ -1024,8 +1052,12 @@ class InventoryController extends AdminController {
             return 'Invalid steering value.';
         }
 
-        if (!in_array($input['fuel'], ['PETROL', 'DIESEL', 'HYBRID', 'ELECTRIC'], true)) {
+        if (!VehicleSpecOptions::isValidFuel($input['fuel'])) {
             return 'Invalid fuel type.';
+        }
+
+        if (!VehicleSpecOptions::isValidBodyType($input['body_type'])) {
+            return 'Invalid body type.';
         }
 
         if (!in_array($input['stock_type'], ['In-Stock', 'Auction'], true)) {
@@ -1039,6 +1071,10 @@ class InventoryController extends AdminController {
 
         if ($input['chassis'] === '') {
             return 'Chassis number is required.';
+        }
+
+        if ($input['auction_end_date'] !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $input['auction_end_date'])) {
+            return 'Invalid auction end date.';
         }
 
         if ($input['mileage'] < 0 || $input['engine'] < 0) {
@@ -1110,6 +1146,11 @@ class InventoryController extends AdminController {
         $priceInspectionJpy = (float) ($_POST['price_inspection_jpy'] ?? 0);
         $priceInsuranceJpy = (float) ($_POST['price_insurance_jpy'] ?? 0);
 
+        $auctionEndDate = trim($_POST['auction_end_date'] ?? '');
+        if ($auctionEndDate === '') {
+            $auctionEndDate = null;
+        }
+
         return [
             'make' => trim($_POST['make'] ?? ''),
             'model' => trim($_POST['model'] ?? ''),
@@ -1119,16 +1160,17 @@ class InventoryController extends AdminController {
             'car_grade' => trim($_POST['car_grade'] ?? ''),
             'mileage' => (int) ($_POST['mileage'] ?? 0),
             'engine' => (int) ($_POST['engine'] ?? 0),
-            'transmission' => trim($_POST['transmission'] ?? 'AT'),
+            'transmission' => strtoupper(trim($_POST['transmission'] ?? 'AT')),
             'drive' => trim($_POST['drive'] ?? ''),
-            'steering' => trim($_POST['steering'] ?? 'RHD'),
-            'fuel' => trim($_POST['fuel'] ?? 'PETROL'),
+            'steering' => strtoupper(trim($_POST['steering'] ?? 'RHD')),
+            'fuel' => strtoupper(trim($_POST['fuel'] ?? 'PETROL')),
             'body_type' => trim($_POST['body_type'] ?? 'Hatchback'),
             'doors' => (int) ($_POST['doors'] ?? 0),
             'seats' => (int) ($_POST['seats'] ?? 0),
             'stock_type' => trim($_POST['stock_type'] ?? 'In-Stock'),
             'auction_house' => trim($_POST['auction_house'] ?? ''),
             'lot_number' => trim($_POST['lot_number'] ?? ''),
+            'auction_end_date' => $auctionEndDate,
             'location' => trim($_POST['location'] ?? ''),
             'color' => trim($_POST['color'] ?? ''),
             'dimension' => trim($_POST['dimension'] ?? ''),

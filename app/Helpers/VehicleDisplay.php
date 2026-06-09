@@ -79,15 +79,12 @@ class VehicleDisplay
 
     public static function transmission(?string $value): string
     {
-        $normalized = strtoupper(trim((string) $value));
-        if ($normalized === 'AT') {
-            return 'Automatic (AT)';
-        }
-        if ($normalized === 'MT') {
-            return 'Manual (MT)';
-        }
+        return VehicleSpecOptions::transmissionLabel($value);
+    }
 
-        return self::text($value);
+    public static function fuel(?string $value): string
+    {
+        return VehicleSpecOptions::fuelLabel($value);
     }
 
     public static function steering(?string $value): string

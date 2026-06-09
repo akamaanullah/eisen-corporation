@@ -78,9 +78,9 @@ $imgBase = 'https://images.unsplash.com/';
             <div class="contact-info-card card">
               <h3 class="contact-info-card__title" data-i18n="contact.office.title">Head office</h3>
               <address class="contact-info-card__address">
-                <strong>Eisen Corporation</strong><br />
-                <span data-i18n="contact.office.line1">2-1 Minato Mirai, Nishi-ku</span><br />
-                <span data-i18n="contact.office.line2">Yokohama, Kanagawa 220-0012, Japan</span>
+                <strong>Eisen Inc.</strong><br />
+                <span data-i18n="contact.office.line1">3-22-32 Tanaka, Matsubushi Machi</span><br />
+                <span data-i18n="contact.office.line2">Kitakatsushika Gun, Saitama Prefecture 343-0117</span>
               </address>
             </div>
 
@@ -88,7 +88,7 @@ $imgBase = 'https://images.unsplash.com/';
               <h3 class="contact-info-card__title" data-i18n="contact.hours.title">Business hours</h3>
               <ul class="contact-info-card__list">
                 <li><span data-i18n="contact.hours.weekdays">Mon – Fri</span><span>09:00 – 18:00 JST</span></li>
-                <li><span data-i18n="contact.hours.saturday">Saturday</span><span>10:00 – 14:00 JST</span></li>
+                <li><span data-i18n="contact.hours.saturday">Saturday</span><span>09:00 – 13:00 JST</span></li>
                 <li><span data-i18n="contact.hours.sunday">Sunday &amp; holidays</span><span data-i18n="contact.hours.closed">Closed</span></li>
               </ul>
             </div>

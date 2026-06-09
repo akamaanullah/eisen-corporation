@@ -48,7 +48,7 @@ return [
             'title' => 'Comfort & Convenience',
             'i18n' => 'product.options.comfort',
             'items' => [
-                ['label' => 'ACC', 'active' => false],
+                ['label' => 'AAC', 'active' => false],
                 ['label' => 'Air Conditioner', 'active' => true],
                 ['label' => 'Audio Player', 'active' => true],
                 ['label' => 'Both Power Slide Door', 'active' => false],

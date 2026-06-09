@@ -125,7 +125,7 @@ class ProductController extends Controller {
                 'steering' => $car['steering'],
                 'steeringDisplay' => VehicleDisplay::steering($car['steering']),
                 'fuel' => $car['fuel'],
-                'fuelDisplay' => VehicleDisplay::upperText($car['fuel']),
+                'fuelDisplay' => VehicleDisplay::fuel($car['fuel']),
                 'doors' => $car['doors'],
                 'seats' => $car['seats'],
                 'doorsDisplay' => VehicleDisplay::count((int) $car['doors']),
@@ -174,7 +174,7 @@ class ProductController extends Controller {
                 ['label' => 'Transmission', 'value' => VehicleDisplay::transmission($car['transmission'])],
                 ['label' => 'Drive Type', 'value' => VehicleDisplay::drive($car['drive_type'])],
                 ['label' => 'Steering', 'value' => VehicleDisplay::steering($car['steering'])],
-                ['label' => 'Fuel', 'value' => VehicleDisplay::upperText($car['fuel'])],
+                ['label' => 'Fuel', 'value' => VehicleDisplay::fuel($car['fuel'])],
             ];
 
             // Fetch only options selected for this vehicle

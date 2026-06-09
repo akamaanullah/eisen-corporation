@@ -2,23 +2,29 @@
 $pageTitle = "Dashboard | Eisen Admin";
 $pageScript = "dashboard.js";
 include dirname(__DIR__) . '/admin/partials/header.php'; 
+
+$s = $stats ?? [];
+$reservations = $s['today_reservations'] ?? [];
+$activities = $s['recent_activities'] ?? [];
+$auctionAlerts = $auctionAlerts ?? ($s['auction_alerts'] ?? []);
 ?>
+
+<?php include dirname(__DIR__) . '/admin/partials/auction-alerts.php'; ?>
 
 <div class="dashboard-page-content">
     <div class="page-header-container mb-30">
         <div class="header-title-group">
             <h1 class="page-title">Dashboard</h1>
-            <p style="color: var(--color-text-muted); margin: 4px 0 0 0;">Eisen Corporation — System Status & Performance</p>
+            <p style="color: var(--color-text-muted); margin: 4px 0 0 0;">Eisen Corporation — live inventory and system overview</p>
         </div>
         <div class="header-actions">
-            <button class="btn btn-primary" onclick="window.location.href='<?= BASE_URL ?>/admin/reports'">
-                <i data-lucide="bar-chart-2"></i>
-                <span>View Analytics</span>
+            <button class="btn btn-primary" onclick="window.location.href='<?= BASE_URL ?>/admin/inventory/new'">
+                <i data-lucide="plus-circle"></i>
+                <span>Add Listing</span>
             </button>
         </div>
     </div>
 
-    <!-- Quick Stats Cards Row -->
     <div class="dashboard-stats-grid mb-30">
         <div class="stat-card">
             <div class="stat-card-header">
@@ -27,31 +33,33 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                 </div>
                 <div class="stat-info">
                     <span class="stat-label">Total Listings</span>
-                    <span class="stat-change text-success">+15 this week</span>
+                    <span class="stat-change text-success">+<?= (int) ($s['new_this_week'] ?? 0) ?> this week</span>
                 </div>
             </div>
             <div class="stat-card-body">
-                <h2 class="stat-value"><?= number_format($stats['total_listings']) ?></h2>
+                <h2 class="stat-value"><?= number_format((int) ($s['total_listings'] ?? 0)) ?></h2>
                 <p style="margin: 6px 0 0 0; font-size: 11px; color: var(--color-text-muted);">
-                    <strong><?= $stats['active_in_stock'] ?></strong> In-Stock · <strong><?= $stats['active_auction'] ?></strong> Live Auction
+                    <strong><?= (int) ($s['active_in_stock'] ?? 0) ?></strong> In-Stock ·
+                    <strong><?= (int) ($s['active_auction'] ?? 0) ?></strong> Auction ·
+                    <strong><?= (int) ($s['available_stock'] ?? 0) ?></strong> Available
                 </p>
             </div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card" style="cursor: pointer;" onclick="window.location.href='<?= BASE_URL ?>/admin/inventory/auction-ending'">
             <div class="stat-card-header">
                 <div class="stat-icon-box bg-soft-warning">
-                    <i data-lucide="clock"></i>
+                    <i data-lucide="calendar-clock"></i>
                 </div>
                 <div class="stat-info">
-                    <span class="stat-label">Today's Holds</span>
-                    <span class="stat-change text-danger" style="color: var(--color-danger);">-2 expired</span>
+                    <span class="stat-label">Auction Ending Soon</span>
+                    <span class="stat-change" style="color: var(--color-warning);">Next <?= (int) \App\Helpers\AdminStats::AUCTION_ALERT_DAYS ?> days</span>
                 </div>
             </div>
             <div class="stat-card-body">
-                <h2 class="stat-value"><?= count($stats['today_reservations']) ?></h2>
+                <h2 class="stat-value"><?= (int) ($s['auction_ending_soon'] ?? 0) ?></h2>
                 <p style="margin: 6px 0 0 0; font-size: 11px; color: var(--color-text-muted);">
-                    Active 24hr customer reservations
+                    Click to view full auction ending list
                 </p>
             </div>
         </div>
@@ -59,17 +67,18 @@ include dirname(__DIR__) . '/admin/partials/header.php';
         <div class="stat-card">
             <div class="stat-card-header">
                 <div class="stat-icon-box bg-soft-info">
-                    <i data-lucide="gavel"></i>
+                    <i data-lucide="users"></i>
                 </div>
                 <div class="stat-info">
-                    <span class="stat-label">Pending Bid Requests</span>
-                    <span class="stat-change text-success">+4 new</span>
+                    <span class="stat-label">Registered Buyers</span>
+                    <span class="stat-change text-success">+<?= (int) ($s['new_users_week'] ?? 0) ?> this week</span>
                 </div>
             </div>
             <div class="stat-card-body">
-                <h2 class="stat-value"><?= $stats['pending_bids'] ?></h2>
+                <h2 class="stat-value"><?= number_format((int) ($s['total_users'] ?? 0)) ?></h2>
                 <p style="margin: 6px 0 0 0; font-size: 11px; color: var(--color-text-muted);">
-                    Waiting agent callback approval
+                    <strong><?= (int) ($s['favorites_count'] ?? 0) ?></strong> saved favorites ·
+                    <strong><?= (int) ($s['blog_posts'] ?? 0) ?></strong> blog posts
                 </p>
             </div>
         </div>
@@ -80,30 +89,29 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                     <i data-lucide="credit-card"></i>
                 </div>
                 <div class="stat-info">
-                    <span class="stat-label">Monthly Revenue</span>
-                    <span class="stat-change text-success">+8.4% vs last month</span>
+                    <span class="stat-label">Confirmed Revenue (USD)</span>
+                    <span class="stat-change text-success">Live from payments</span>
                 </div>
             </div>
             <div class="stat-card-body">
-                <h2 class="stat-value text-gold" style="color: var(--color-gold-500);">$<?= number_format($stats['monthly_revenue']) ?></h2>
+                <h2 class="stat-value text-gold" style="color: var(--color-gold-500);">$<?= number_format((float) ($s['monthly_revenue'] ?? 0)) ?></h2>
                 <p style="margin: 6px 0 0 0; font-size: 11px; color: var(--color-text-muted);">
-                    Year-to-date: <strong>$<?= number_format($stats['yearly_revenue']) ?></strong>
+                    This month · YTD <strong>$<?= number_format((float) ($s['yearly_revenue'] ?? 0)) ?></strong>
                 </p>
             </div>
         </div>
     </div>
 
-    <!-- Main Grid Section -->
     <div class="dashboard-main-grid">
-        
-        <!-- Left Panel: Active Holds & Activity -->
         <div class="grid-span-2">
-            <!-- Active Holds -->
             <div class="card">
                 <div class="card-header-flex">
                     <h3 class="card-title-sm">Active Holds & Reservations</h3>
-                    <span class="badge badge-info">24H Timer Enabled</span>
+                    <span class="badge badge-info"><?= count($reservations) ?> active</span>
                 </div>
+                <?php if (empty($reservations)): ?>
+                <p style="padding: 24px; color: var(--color-text-muted); margin: 0;">No active reservations in the system right now.</p>
+                <?php else: ?>
                 <div class="table-responsive">
                     <table class="data-table-minimal">
                         <thead>
@@ -116,19 +124,17 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($stats['today_reservations'] as $index => $res): ?>
+                            <?php foreach ($reservations as $res): ?>
                             <tr>
                                 <td><strong><?= htmlspecialchars($res['buyer_name']) ?></strong></td>
                                 <td><?= htmlspecialchars($res['car']) ?></td>
                                 <td><code><?= htmlspecialchars($res['chassis']) ?></code></td>
                                 <td>
-                                    <span class="timer-pill" data-countdown="<?= $res['time_remaining'] ?>">
-                                        --:--:--
-                                    </span>
+                                    <span class="timer-pill" data-countdown="<?= (int) $res['time_remaining'] ?>">--:--:--</span>
                                 </td>
                                 <td style="text-align: right;">
-                                    <button class="btn btn-primary btn-sm" onclick="window.location.href='<?= BASE_URL ?>/admin/customers'">
-                                        Verify Lead
+                                    <button class="btn btn-primary btn-sm" onclick="window.location.href='<?= BASE_URL ?>/admin/reservations'">
+                                        View
                                     </button>
                                 </td>
                             </tr>
@@ -136,27 +142,30 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                         </tbody>
                     </table>
                 </div>
+                <?php endif; ?>
             </div>
 
-            <!-- Live Activities Timeline -->
             <div class="card">
                 <div class="card-header-flex">
-                    <h3 class="card-title-sm">Live System Logs</h3>
+                    <h3 class="card-title-sm">Recent Activity</h3>
                     <span class="pulse-indicator">
-                        <span class="pulse-dot"></span> Live updates
+                        <span class="pulse-dot"></span> Live from database
                     </span>
                 </div>
-                
+                <?php if (empty($activities)): ?>
+                <p style="padding: 24px; color: var(--color-text-muted); margin: 0;">No recent activity yet.</p>
+                <?php else: ?>
                 <div class="activity-timeline">
-                    <?php foreach ($stats['recent_activities'] as $act): ?>
+                    <?php foreach ($activities as $act): ?>
                     <?php
                     $icon = 'activity';
                     $colorClass = 'bg-soft-primary';
-                    if ($act['type'] === 'reservation') { $icon = 'clock'; $colorClass = 'bg-soft-warning'; }
-                    else if ($act['type'] === 'bid') { $icon = 'gavel'; $colorClass = 'bg-soft-info'; }
-                    else if ($act['type'] === 'document') { $icon = 'file-text'; $colorClass = 'bg-soft-primary'; }
-                    else if ($act['type'] === 'payment') { $icon = 'dollar-sign'; $colorClass = 'bg-soft-success'; }
-                    else if ($act['type'] === 'shipping') { $icon = 'ship'; $colorClass = 'bg-soft-success'; }
+                    if ($act['type'] === 'inventory') { $icon = 'car'; $colorClass = 'bg-soft-primary'; }
+                    elseif ($act['type'] === 'reservation') { $icon = 'clock'; $colorClass = 'bg-soft-warning'; }
+                    elseif ($act['type'] === 'bid') { $icon = 'gavel'; $colorClass = 'bg-soft-info'; }
+                    elseif ($act['type'] === 'document') { $icon = 'user-plus'; $colorClass = 'bg-soft-info'; }
+                    elseif ($act['type'] === 'payment') { $icon = 'file-text'; $colorClass = 'bg-soft-success'; }
+                    elseif ($act['type'] === 'shipping') { $icon = 'ship'; $colorClass = 'bg-soft-success'; }
                     ?>
                     <div class="activity-item">
                         <div class="activity-icon-container <?= $colorClass ?>">
@@ -166,17 +175,16 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                             <p class="activity-text">
                                 <strong><?= htmlspecialchars($act['title']) ?></strong>: <?= htmlspecialchars($act['detail']) ?>
                             </p>
-                            <span class="activity-time"><?= $act['time'] ?></span>
+                            <span class="activity-time"><?= htmlspecialchars($act['time']) ?></span>
                         </div>
                     </div>
                     <?php endforeach; ?>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
 
-        <!-- Right Panel: Quick Actions & Alerts -->
         <div>
-            <!-- Quick Actions -->
             <div class="card">
                 <h3 class="card-title-sm mb-20">Quick Operations</h3>
                 <div class="quick-actions-list">
@@ -184,22 +192,21 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                         <i data-lucide="plus-circle" style="color: var(--color-success);"></i>
                         <span>Add In-Stock Car</span>
                     </a>
-                    <button class="btn-action" id="syncAuctionsBtn">
-                        <i data-lucide="refresh-cw" style="color: var(--color-info);"></i>
-                        <span>Sync Auction API</span>
-                    </button>
+                    <a class="btn-action" href="<?= BASE_URL ?>/admin/inventory">
+                        <i data-lucide="list" style="color: var(--color-info);"></i>
+                        <span>Manage Inventory</span>
+                    </a>
                     <a class="btn-action" href="<?= BASE_URL ?>/admin/customers">
                         <i data-lucide="user-check" style="color: var(--color-warning);"></i>
-                        <span>Verify Documents</span>
+                        <span>Customer Registry</span>
                     </a>
-                    <a class="btn-action" href="<?= BASE_URL ?>/admin/shipping">
-                        <i data-lucide="truck" style="color: var(--color-gold-500);"></i>
-                        <span>Log Shipment</span>
+                    <a class="btn-action" href="<?= BASE_URL ?>/admin/blog">
+                        <i data-lucide="file-text" style="color: var(--color-gold-500);"></i>
+                        <span>Manage Blog</span>
                     </a>
                 </div>
             </div>
 
-            <!-- Pending Verifications Alert -->
             <div class="card" style="border-left: 4px solid var(--color-warning);">
                 <div style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px;">
                     <i data-lucide="alert-triangle" style="color: var(--color-warning); flex-shrink: 0; width: 22px; height: 22px;"></i>
@@ -207,24 +214,31 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                 </div>
                 <ul style="display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
                     <li style="display: flex; justify-content: space-between;">
-                        <span>Pending documents check:</span>
-                        <strong class="text-gold" style="color: var(--color-gold-600);">2 users</strong>
+                        <span>Auction ending soon:</span>
+                        <strong class="text-gold" style="color: var(--color-gold-600);"><?= (int) ($s['auction_ending_soon'] ?? 0) ?> listings</strong>
                     </li>
                     <li style="display: flex; justify-content: space-between;">
-                        <span>Pending wire validations:</span>
-                        <strong class="text-gold" style="color: var(--color-gold-600);">3 deposits</strong>
+                        <span>Pending bid requests:</span>
+                        <strong class="text-gold" style="color: var(--color-gold-600);"><?= (int) ($s['pending_bids'] ?? 0) ?></strong>
                     </li>
                     <li style="display: flex; justify-content: space-between;">
-                        <span>Holds expiring soon:</span>
-                        <strong class="text-gold" style="color: var(--color-gold-600);">1 hold</strong>
+                        <span>Pending payments:</span>
+                        <strong class="text-gold" style="color: var(--color-gold-600);"><?= (int) ($s['pending_payments'] ?? 0) ?></strong>
+                    </li>
+                    <li style="display: flex; justify-content: space-between;">
+                        <span>Deposit verifications:</span>
+                        <strong class="text-gold" style="color: var(--color-gold-600);"><?= (int) ($s['pending_deposits'] ?? 0) ?></strong>
+                    </li>
+                    <li style="display: flex; justify-content: space-between;">
+                        <span>Active reservations:</span>
+                        <strong class="text-gold" style="color: var(--color-gold-600);"><?= (int) ($s['active_reservations'] ?? 0) ?></strong>
                     </li>
                 </ul>
-                <button class="btn btn-gold btn-sm mt-20" style="width: 100%;" onclick="window.location.href='<?= BASE_URL ?>/admin/customers'">
-                    Resolve Actions
+                <button class="btn btn-gold btn-sm mt-20" style="width: 100%;" onclick="window.location.href='<?= BASE_URL ?>/admin/inventory'">
+                    Open Inventory
                 </button>
             </div>
         </div>
-
     </div>
 </div>
 

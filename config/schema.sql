@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS `vehicles` (
     `type` ENUM('In-Stock', 'Auction') NOT NULL,
     `auction_house` VARCHAR(100) NOT NULL DEFAULT '',
     `lot_number` VARCHAR(50) NOT NULL DEFAULT '',
+    `auction_end_date` DATE NULL,
     `make` VARCHAR(50) NOT NULL,
     `model` VARCHAR(50) NOT NULL,
     `year` INT NOT NULL,
@@ -63,9 +64,9 @@ CREATE TABLE IF NOT EXISTS `vehicles` (
     `car_grade` VARCHAR(30) NOT NULL DEFAULT '', -- e.g. S, X, G (trim / model grade)
     `mileage_km` INT NOT NULL,
     `engine_cc` INT NOT NULL,
-    `transmission` ENUM('AT', 'MT') NOT NULL DEFAULT 'AT',
+    `transmission` VARCHAR(20) NOT NULL DEFAULT 'AT',
     `steering` ENUM('RHD', 'LHD') NOT NULL DEFAULT 'RHD',
-    `fuel` ENUM('PETROL', 'DIESEL', 'HYBRID', 'ELECTRIC') NOT NULL DEFAULT 'PETROL',
+    `fuel` VARCHAR(30) NOT NULL DEFAULT 'PETROL',
     `doors` INT NOT NULL DEFAULT 5,
     `seats` INT NOT NULL DEFAULT 5,
     `location` VARCHAR(100) NOT NULL DEFAULT 'KOBE, JAPAN',
@@ -317,7 +318,7 @@ INSERT INTO `options` (`category`, `label`) VALUES
 ('Comfort & Convenience', 'Power Window All'),
 ('Comfort & Convenience', 'Push Start'),
 ('Comfort & Convenience', 'Steering Switch'),
-('Comfort & Convenience', 'ACC'),
+('Comfort & Convenience', 'AAC'),
 ('Comfort & Convenience', 'Both Power Slide Door'),
 ('Comfort & Convenience', 'Cooler'),
 ('Comfort & Convenience', 'Cruise Control'),
@@ -364,6 +365,7 @@ INSERT INTO `options` (`category`, `label`) VALUES
 ('Safety', 'Front Camera'),
 ('Safety', 'Side Camera'),
 ('Safety', 'Corner Sensor'),
+('Safety', 'Parking Sensor'),
 ('Safety', 'ESC');
 
 -- E. Category: Other

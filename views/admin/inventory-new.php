@@ -232,13 +232,7 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                             <label class="form-label" for="engine">Engine Size (CC)</label>
                             <input class="form-control" type="number" id="engine" name="engine" min="0" placeholder="e.g. 1300">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="transmission">Transmission</label>
-                            <select class="form-control" id="transmission" name="transmission">
-                                <option value="AT">Automatic (AT)</option>
-                                <option value="MT">Manual (MT)</option>
-                            </select>
-                        </div>
+                        <?php $renderSpecFields = ['transmission']; include __DIR__ . '/partials/inventory-spec-fields.php'; ?>
                         <div class="form-group">
                             <label class="form-label" for="drive">Drive Train</label>
                             <input class="form-control" type="text" id="drive" name="drive" placeholder="e.g. 2WD">
@@ -253,24 +247,7 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                                 <option value="LHD">Left Hand Drive (LHD)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" for="fuel">Fuel Type</label>
-                            <select class="form-control" id="fuel" name="fuel">
-                                <option value="PETROL">Petrol (Gasoline)</option>
-                                <option value="DIESEL">Diesel</option>
-                                <option value="HYBRID">Hybrid</option>
-                                <option value="ELECTRIC">Electric</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" for="body_type">Body Type</label>
-                            <select class="form-control" id="body_type" name="body_type">
-                                <option value="Hatchback">Hatchback</option>
-                                <option value="Sedan">Sedan</option>
-                                <option value="SUV">SUV</option>
-                                <option value="Van">Van</option>
-                            </select>
-                        </div>
+                        <?php $renderSpecFields = ['fuel', 'body_type']; include __DIR__ . '/partials/inventory-spec-fields.php'; ?>
                     </div>
 
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
@@ -295,7 +272,7 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                         </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px;">
                         <div class="form-group">
                             <label class="form-label" for="auction_house">Auction House Name</label>
                             <input class="form-control" type="text" id="auction_house" name="auction_house" placeholder="e.g. USS Tokyo" maxlength="100">
@@ -304,6 +281,11 @@ include dirname(__DIR__) . '/admin/partials/header.php';
                         <div class="form-group">
                             <label class="form-label" for="lot_number">Lot Number</label>
                             <input class="form-control" type="text" id="lot_number" name="lot_number" placeholder="e.g. A-1234" maxlength="50">
+                            <small style="font-size: 11px; color: var(--color-text-muted);">Admin only — not shown on the website.</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="auction_end_date">Auction End Date</label>
+                            <input class="form-control" type="date" id="auction_end_date" name="auction_end_date">
                             <small style="font-size: 11px; color: var(--color-text-muted);">Admin only — not shown on the website.</small>
                         </div>
                     </div>
